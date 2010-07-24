@@ -4,6 +4,14 @@
 
 include $(GOROOT)/src/Make.$(GOARCH)
 
+daqstatus: daqstatus.6
+	6l -o daqstatus -L _obj daqstatus.6
+
+daqstatus.6: daqstatus.go _obj/xmlrpc.a
+	6g -I _obj daqstatus.go
+
+package: xmlrpc.go
+
 TARG=xmlrpc
 
 GOFILES=\
