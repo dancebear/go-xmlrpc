@@ -58,14 +58,7 @@ func getStateVals(st ParseState, isResp bool) (string, bool) {
 
 func getValue(typeName string, b []byte) (interface{}, string) {
     valStr := string(b)
-    if typeName == "int" || typeName == "i4" {
-        i, err := strconv.Atoi(valStr)
-        if err != nil {
-            return i, err.String()
-        }
-
-        return i, ""
-    } else if typeName == "boolean" {
+    if typeName == "boolean" {
         if valStr == "1" {
             return true, ""
         } else if valStr == "0" {
@@ -73,6 +66,15 @@ func getValue(typeName string, b []byte) (interface{}, string) {
         } else {
             return nil, fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
         }
+    } else if typeName == "int" || typeName == "i4" {
+        i, err := strconv.Atoi(valStr)
+        if err != nil {
+            return i, err.String()
+        }
+
+        return i, ""
+    } else if typeName == "string" {
+        return valStr, ""
     }
 
     return nil, fmt.Sprintf("Unknown type <%s> for \"%s\"", typeName, valStr)

@@ -96,6 +96,27 @@ func TestParseResponseI4(t *testing.T) {
     }
 }
 
+func TestParseResponseString(t *testing.T) {
+    const typeName = "string"
+    const strVal = "abc123"
+
+    respText := wrapType(typeName, strVal, true)
+
+    val, err := ParseString(respText, true)
+    if err != "" {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    i, ok := val.(string)
+    if ! ok {
+        t.Fatalf("Returned type %T, not %s", val, typeName)
+    }
+
+    if i != strVal {
+        t.Fatalf("Returned value %d, not %v", i, strVal)
+    }
+}
+
 func TestParseRequestInt(t *testing.T) {
     const typeName = "int"
     const intVal = 54321
