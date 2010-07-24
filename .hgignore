@@ -1,0 +1,9 @@
+syntax: glob
+
+.\#*
+*.swp
+
+_obj/
+_test/
+
+*.6
