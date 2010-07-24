@@ -9,7 +9,7 @@ import (
 	"net"
 	"os"
 	"strings"
-    "xml"
+    "xmlrpc"
 )
 
 /********** From request.go ************/
@@ -117,152 +117,6 @@ func (nopCloser) Close() os.Error { return nil }
 
 /************** My code *****************/
 
-/*
-import (
-    "fmt"
-    "strings"
-)
-*/
-
-const tokenMethodResponse = "methodResponse"
-const tokenParams = "params"
-const tokenParam = "param"
-
-func parseValue(p *xml.Parser) (interface{}, string) {
-    var inVal bool
-    var typeName string
-    var rtnVal interface{}
-
-    for {
-        tok, err := p.Token()
-        if tok == nil {
-            break
-        }
-
-        if err != nil {
-            fmt.Fprintf(os.Stderr, "Token returned %v", err)
-            os.Exit(1)
-        }
-
-        switch v := tok.(type) {
-        case xml.EndElement:
-            if v.Name.Local == "param" {
-                return rtnVal, ""
-            } else if v.Name.Local == "value" {
-                if ! inVal {
-                    return nil, fmt.Sprintf("Multiple </%s> tokens",
-                        v.Name.Local)
-                }
-                inVal = false
-            } else if typeName == "" {
-                return nil, fmt.Sprintf("Type was not found", v.Name.Local)
-            } else if v.Name.Local == typeName {
-                typeName = ""
-            }
-        case xml.StartElement:
-            if v.Name.Local == "value" {
-                if inVal {
-                    return nil, fmt.Sprintf("Multiple <%s> tokens",
-                        v.Name.Local)
-                }
-                inVal = true
-            } else if typeName != "" {
-                return nil, fmt.Sprintf("Found multiple types (<%s> and <%s>",
-                    v.Name.Local, typeName)
-            } else {
-                typeName = v.Name.Local
-            }
-        case xml.CharData:
-            if len(v) == 1 && (v[0] =='\n' || v[0] == '\r') {
-                // ignore
-            } else {
-                fmt.Printf("====> Need to grab %v\n", v)
-            }
-        default:
-            return nil, fmt.Sprintf("Not handling %v <%T>\n", v, v)
-        }
-    }
-
-    return rtnVal, ""
-}
-
-func parse(r io.Reader) (interface{}, string) {
-    p := xml.NewParser(r)
-
-    var rtnVal interface{}
-
-    var inResp, inParams, inParam bool
-    for {
-        tok, err := p.Token()
-        if tok == nil {
-            break
-        }
-
-        if err != nil {
-            fmt.Fprintf(os.Stderr, "Token returned %v", err)
-            os.Exit(1)
-        }
-
-        switch v := tok.(type) {
-        case xml.EndElement:
-            if v.Name.Local == tokenMethodResponse {
-                if ! inResp {
-                    return nil, fmt.Sprintf("Multiple </%s> tokens", v.Name.Local)
-                }
-                inResp = false
-            } else if v.Name.Local == tokenParams {
-                if ! inParams {
-                    return nil, fmt.Sprintf("Multiple </%s> tokens", v.Name.Local)
-                }
-                inParams = false
-            } else if v.Name.Local == tokenParam {
-                if ! inParam {
-                    return nil, fmt.Sprintf("Multiple </%s> tokens", v.Name.Local)
-                }
-                inParam = false
-            } else {
-                return nil, fmt.Sprintf("Unknown </%s> token", v.Name.Local)
-            }
-        case xml.StartElement:
-            if v.Name.Local == tokenMethodResponse {
-                if inResp {
-                    return nil, fmt.Sprintf("Multiple <%s> tokens", v.Name.Local)
-                }
-                inResp = true
-            } else if v.Name.Local == tokenParams {
-                if ! inResp {
-                    return nil, fmt.Sprintf("Out-of-order <%s> token", v.Name.Local)
-                } else if inParams {
-                    return nil, fmt.Sprintf("Multiple <%s> tokens", v.Name.Local)
-                }
-                inParams = true
-            } else if v.Name.Local == tokenParam {
-                if ! inResp || ! inParams {
-                    return nil, fmt.Sprintf("Out-of-order <%s> token", v.Name.Local)
-                } else if inParam {
-                    return nil, fmt.Sprintf("Multiple <%s> tokens", v.Name.Local)
-                }
-                inParam = true
-                var rtnErr string
-                rtnVal, rtnErr = parseValue(p)
-                if rtnErr != "" {
-                    return nil, rtnErr
-                }
-            } else {
-                return nil, fmt.Sprintf("Unknown <%s> token", v.Name.Local)
-            }
-        case xml.CharData:
-            if len(v) == 1 && (v[0] =='\n' || v[0] == '\r') {
-                // ignore
-            } else {
-                fmt.Printf("??? %v<%T>\n", v, v)
-            }
-        }
-    }
-
-    return rtnVal, ""
-}
-
 func main() {
     body := "<?xml version=\"1.0\"?>\n<methodCall>\n<methodName>rpc_ping</methodName>\n<params>\n</params>\n</methodCall>\n"
     //t := "<?xml version='1.0'?>\n<methodCall>\n<methodName>rpc_ping</methodName>\n<params>\n</params>\n</methodCall>\n"
@@ -276,13 +130,13 @@ func main() {
     }
 
     //io.Copy(os.Stdout, r.Body)
-    pval, perr := parse(r.Body)
+    pval, perr := xmlrpc.Parse(r.Body, true)
     if len(perr) != 0 {
         fmt.Fprintf(os.Stderr, "%s\n", perr)
         os.Exit(1)
     }
 
-    fmt.Printf("XML-RPC returned %v\n", pval)
+    fmt.Printf("XML-RPC returned %v <%T>\n", pval, pval)
 
     if r.Close {
         fmt.Printf("Closing ...")
