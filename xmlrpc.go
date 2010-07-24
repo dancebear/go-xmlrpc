@@ -65,6 +65,14 @@ func getValue(typeName string, b []byte) (interface{}, string) {
         }
 
         return i, ""
+    } else if typeName == "boolean" {
+        if valStr == "1" {
+            return true, ""
+        } else if valStr == "0" {
+            return false, ""
+        } else {
+            return nil, fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
+        }
     }
 
     return nil, fmt.Sprintf("Unknown type <%s> for \"%s\"", typeName, valStr)
