@@ -66,6 +66,13 @@ func getValue(typeName string, b []byte) (interface{}, string) {
         } else {
             return nil, fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
         }
+    } else if typeName == "double" {
+        f, err := strconv.Atof(valStr)
+        if err != nil {
+            return f, err.String()
+        }
+
+        return f, ""
     } else if typeName == "int" || typeName == "i4" {
         i, err := strconv.Atoi(valStr)
         if err != nil {

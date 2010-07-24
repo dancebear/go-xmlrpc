@@ -117,6 +117,56 @@ func TestParseResponseString(t *testing.T) {
     }
 }
 
+func TestParseResponseRawString(t *testing.T) {
+    const typeName = "string"
+    const strVal = "abc123"
+
+    respText := fmt.Sprintf(`
+<?xml version='1.0'?>
+<methodResponse>
+  <params>
+    <param>
+      <value>%s</value>
+    </param>
+  </params>
+</methodResponse>`, strVal)
+
+    val, err := ParseString(respText, true)
+    if err != "" {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    i, ok := val.(string)
+    if ! ok {
+        t.Fatalf("Returned type %T, not %s", val, typeName)
+    }
+
+    if i != strVal {
+        t.Fatalf("Returned value %d, not %v", i, strVal)
+    }
+}
+
+func TestParseResponseDouble(t *testing.T) {
+    const typeName = "double"
+    const fltVal = 123.456
+
+    respText := wrapType(typeName, fmt.Sprintf("%f", fltVal), true)
+
+    val, err := ParseString(respText, true)
+    if err != "" {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    i, ok := val.(float)
+    if ! ok {
+        t.Fatalf("Returned type %T, not %s", val, typeName)
+    }
+
+    if i != fltVal {
+        t.Fatalf("Returned value %d, not %v", i, fltVal)
+    }
+}
+
 func TestParseRequestInt(t *testing.T) {
     const typeName = "int"
     const intVal = 54321
