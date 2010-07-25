@@ -189,25 +189,32 @@ func Parse(r io.Reader, isResp bool) (interface{}, string) {
                     stateKey, wantEnd = getStateVals(state, isResp)
                 }
             } else {
-                return nil, fmt.Sprintf("Unexpected <%s> token", v.Name.Local)
+                return nil, fmt.Sprintf("Unexpected <%s> token for state %s",
+                    v.Name.Local, state)
             }
         case xml.EndElement:
             if v.Name.Local == stateKey && wantEnd {
                 state += 1
                 stateKey, wantEnd = getStateVals(state, isResp)
+            } else if state == psParam && ! wantEnd && v.Name.Local == "params" {
+                state = psEndMethod
+                stateKey, wantEnd = getStateVals(state, isResp)
             } else {
-                return nil, fmt.Sprintf("Unexpected </%s> token", v.Name.Local)
+                return nil, fmt.Sprintf("Unexpected </%s> token for state %s",
+                    v.Name.Local, state)
             }
         case xml.CharData:
             for _, c := range v {
                 if !isSpace(c) {
-                    return nil, "Found non-whitespace chars"
+                    return nil,
+                    fmt.Sprintf("Found non-whitespace chars for state %s", state)
                 }
             }
         case xml.ProcInst:
             // ignored
         default:
-            return nil, fmt.Sprintf("Not handling %v (type %T)", v, v)
+            return nil, fmt.Sprintf("Not handling %v (type %T) for state %s",
+                v, v, state)
         }
     }
 
