@@ -48,10 +48,10 @@ func TestParseResponseNoData(t *testing.T) {
 
 func TestParseResponseBool(t *testing.T) {
     const typeName = "boolean"
-    const boolVal = true
+    const expVal = true
 
     var boolStr string
-    if boolVal {
+    if expVal {
         boolStr = "1"
     } else {
         boolStr = "0"
@@ -69,16 +69,16 @@ func TestParseResponseBool(t *testing.T) {
         t.Fatalf("Returned type %T, not %s", val, typeName)
     }
 
-    if i != boolVal {
-        t.Fatalf("Returned value %d, not %v", i, boolVal)
+    if i != expVal {
+        t.Fatalf("Returned value %v, not %v", i, expVal)
     }
 }
 
 func TestParseResponseInt(t *testing.T) {
     const typeName = "int"
-    const intVal = 1279905716
+    const expVal = 1279905716
 
-    respText := wrapType(typeName, fmt.Sprintf("%v", intVal), true)
+    respText := wrapType(typeName, fmt.Sprintf("%v", expVal), true)
 
     val, err := ParseString(respText, true)
     if err != "" {
@@ -90,16 +90,16 @@ func TestParseResponseInt(t *testing.T) {
         t.Fatalf("Returned type %T, not %s", val, typeName)
     }
 
-    if i != intVal {
-        t.Fatalf("Returned value %d, not %d", i, intVal)
+    if i != expVal {
+        t.Fatalf("Returned value %v, not %v", i, expVal)
     }
 }
 
 func TestParseResponseI4(t *testing.T) {
     const typeName = "i4"
-    const i4Val = -433221
+    const expVal = -433221
 
-    respText := wrapType(typeName, fmt.Sprintf("%v", i4Val), true)
+    respText := wrapType(typeName, fmt.Sprintf("%v", expVal), true)
 
     val, err := ParseString(respText, true)
     if err != "" {
@@ -111,16 +111,16 @@ func TestParseResponseI4(t *testing.T) {
         t.Fatalf("Returned type %T, not %s", val, typeName)
     }
 
-    if i != i4Val {
-        t.Fatalf("Returned value %d, not %d", i, i4Val)
+    if i != expVal {
+        t.Fatalf("Returned value %v, not %v", i, expVal)
     }
 }
 
 func TestParseResponseString(t *testing.T) {
     const typeName = "string"
-    const strVal = "abc123"
+    const expVal = "abc123"
 
-    respText := wrapType(typeName, strVal, true)
+    respText := wrapType(typeName, expVal, true)
 
     val, err := ParseString(respText, true)
     if err != "" {
@@ -132,14 +132,14 @@ func TestParseResponseString(t *testing.T) {
         t.Fatalf("Returned type %T, not %s", val, typeName)
     }
 
-    if i != strVal {
-        t.Fatalf("Returned value %d, not %v", i, strVal)
+    if i != expVal {
+        t.Fatalf("Returned value %v, not %v", i, expVal)
     }
 }
 
 func TestParseResponseRawString(t *testing.T) {
     const typeName = "string"
-    const strVal = "abc123"
+    const expVal = "abc123"
 
     respText := fmt.Sprintf(`
 <?xml version='1.0'?>
@@ -149,7 +149,7 @@ func TestParseResponseRawString(t *testing.T) {
       <value>%s</value>
     </param>
   </params>
-</methodResponse>`, strVal)
+</methodResponse>`, expVal)
 
     val, err := ParseString(respText, true)
     if err != "" {
@@ -161,16 +161,16 @@ func TestParseResponseRawString(t *testing.T) {
         t.Fatalf("Returned type %T, not %s", val, typeName)
     }
 
-    if i != strVal {
-        t.Fatalf("Returned value %d, not %v", i, strVal)
+    if i != expVal {
+        t.Fatalf("Returned value %v, not %v", i, expVal)
     }
 }
 
 func TestParseResponseDouble(t *testing.T) {
     const typeName = "double"
-    const fltVal = 123.456
+    const expVal = 123.456
 
-    respText := wrapType(typeName, fmt.Sprintf("%v", fltVal), true)
+    respText := wrapType(typeName, fmt.Sprintf("%v", expVal), true)
 
     val, err := ParseString(respText, true)
     if err != "" {
@@ -182,16 +182,16 @@ func TestParseResponseDouble(t *testing.T) {
         t.Fatalf("Returned type %T, not %s", val, typeName)
     }
 
-    if i != fltVal {
-        t.Fatalf("Returned value %d, not %v", i, fltVal)
+    if i != expVal {
+        t.Fatalf("Returned value %v, not %v", i, expVal)
     }
 }
 
 func TestParseRequestInt(t *testing.T) {
     const typeName = "int"
-    const intVal = 54321
+    const expVal = 54321
 
-    respText := wrapType(typeName, fmt.Sprintf("%v", intVal), false)
+    respText := wrapType(typeName, fmt.Sprintf("%v", expVal), false)
 
     val, err := ParseString(respText, false)
     if err != "" {
@@ -203,7 +203,7 @@ func TestParseRequestInt(t *testing.T) {
         t.Fatalf("Returned type %T, not %s", val, typeName)
     }
 
-    if i != intVal {
-        t.Fatalf("Returned value %d, not %d", i, intVal)
+    if i != expVal {
+        t.Fatalf("Returned value %v, not %v", i, expVal)
     }
 }
