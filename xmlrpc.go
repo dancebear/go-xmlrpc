@@ -21,6 +21,8 @@ type XMLRPCError struct {
     Msg string
 }
 
+func (err XMLRPCError) String() string { return err.Msg }
+
 type ParseState int
 
 var stateName = []string { "Method", "Params", "Param", "Value",
