@@ -15,7 +15,7 @@ func wrapAndParse(t *testing.T, typeName string, expVal interface{},
 func parseAndCheck(t *testing.T, typeName string, expVal interface{},
     isResp bool, xmlStr string) {
     val, err := UnmarshalString(xmlStr, isResp)
-    if err != "" {
+    if err != nil {
         t.Fatalf("Returned error %s", err)
     }
 
@@ -38,7 +38,7 @@ func parseUnimplemented(t *testing.T, typeName string, expVal interface{},
     isResp bool) {
     xmlStr := wrapType(typeName, fmt.Sprintf("%v", expVal), isResp)
     val, err := UnmarshalString(xmlStr, isResp)
-    if err != "Unimplemented" {
+    if err == nil || err.Msg != "Unimplemented" {
         t.Fatalf("Returned unexpected error %s", err)
     }
 

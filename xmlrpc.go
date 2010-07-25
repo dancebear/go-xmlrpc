@@ -17,7 +17,9 @@ func isSpace(c byte) bool {
         return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
 
-type XMLRPCError string
+type XMLRPCError struct {
+    Msg string
+}
 
 type ParseState int
 
@@ -62,8 +64,8 @@ func getStateVals(st ParseState, isResp bool) (string, bool) {
     return key, isEnd
 }
 
-func getValue(typeName string, b []byte) (interface{}, XMLRPCError) {
-    const unimplemented = XMLRPCError("Unimplemented")
+func getValue(typeName string, b []byte) (interface{}, *XMLRPCError) {
+    var unimplemented = &XMLRPCError{Msg:"Unimplemented"}
 
     valStr := string(b)
     if typeName == "array" {
@@ -72,40 +74,40 @@ func getValue(typeName string, b []byte) (interface{}, XMLRPCError) {
         return nil, unimplemented
     } else if typeName == "boolean" {
         if valStr == "1" {
-            return true, ""
+            return true, nil
         } else if valStr == "0" {
-            return false, ""
+            return false, nil
         } else {
-            return nil, XMLRPCError(fmt.Sprintf("Bad <boolean> value \"%s\"",
-                valStr))
+            msg := fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
+            return nil, &XMLRPCError{Msg:msg}
         }
     } else if typeName == "dateTime.iso8601" {
         return nil, unimplemented
     } else if typeName == "double" {
         f, err := strconv.Atof(valStr)
         if err != nil {
-            return f, XMLRPCError(err.String())
+            return f, &XMLRPCError{Msg:err.String()}
         }
 
-        return f, ""
+        return f, nil
     } else if typeName == "int" || typeName == "i4" {
         i, err := strconv.Atoi(valStr)
         if err != nil {
-            return i, XMLRPCError(err.String())
+            return i, &XMLRPCError{Msg:err.String()}
         }
 
-        return i, ""
+        return i, nil
     } else if typeName == "string" {
-        return valStr, ""
+        return valStr, nil
     } else if typeName == "struct" {
         return nil, unimplemented
     }
 
-    return nil, XMLRPCError(fmt.Sprintf("Unknown type <%s> for \"%s\"",
-        typeName, valStr))
+    return nil, &XMLRPCError{Msg:fmt.Sprintf("Unknown type <%s> for \"%s\"",
+            typeName, valStr)}
 }
 
-func unmarshalValue(p *xml.Parser) (interface{}, XMLRPCError, bool) {
+func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
     var typeName string
     var rtnVal interface{}
 
@@ -118,68 +120,70 @@ func unmarshalValue(p *xml.Parser) (interface{}, XMLRPCError, bool) {
         }
 
         if err != nil {
-            return rtnVal, XMLRPCError(err.String()), noEndValTag
+            return rtnVal, &XMLRPCError{Msg:err.String()}, noEndValTag
         }
 
         switch v := tok.(type) {
         case xml.StartElement:
             if typeName != "" {
-                err := XMLRPCError(fmt.Sprintf("Found multiple types" +
-                    " (%s and %s) inside <value>", typeName, v.Name.Local))
+                err := &XMLRPCError{Msg:fmt.Sprintf("Found multiple types" +
+                        " (%s and %s) inside <value>", typeName, v.Name.Local)}
                 return nil, err, noEndValTag
             }
 
             typeName = v.Name.Local
         case xml.EndElement:
             if typeName == "" && v.Name.Local == "value" {
-                return "", "", true
+                return "", nil, true
             } else if typeName != v.Name.Local {
-                err := XMLRPCError(fmt.Sprintf("Found unexpected </%s>" +
-                    " (wanted </%s>)", v.Name.Local, typeName))
+                err := &XMLRPCError{Msg:fmt.Sprintf("Found unexpected </%s>" +
+                        " (wanted </%s>)", v.Name.Local, typeName)}
                 return nil, err, noEndValTag
             }
 
             if typeName == "string" && rtnVal == nil {
                 rtnVal = ""
             }
-            return rtnVal, "", noEndValTag
+            return rtnVal, nil, noEndValTag
         case xml.CharData:
             if typeName != "" && rtnVal == nil {
-                var valErr XMLRPCError
+                var valErr *XMLRPCError
                 rtnVal, valErr = getValue(typeName, v)
-                if valErr != "" {
+                if valErr != nil {
                     return rtnVal, valErr, noEndValTag
                 }
             } else {
                 for _, c := range v {
                     if !isSpace(c) {
                         if rtnVal == nil {
-                            var valErr XMLRPCError
+                            var valErr *XMLRPCError
                             rtnVal, valErr = getValue("string", v)
                             return rtnVal, valErr, noEndValTag
                         }
 
-                        return nil, "Found non-whitespace chars inside <value>",
-                        noEndValTag
+                        err := &XMLRPCError{Msg:"Found non-whitespace chars" +
+                                " inside <value>"}
+                        return nil, err, noEndValTag
                     }
                 }
             }
         default:
-            err := XMLRPCError(fmt.Sprintf("Not handling <value> %v" +
-                                     " (type %T)", v, v))
+            err := &XMLRPCError{Msg:fmt.Sprintf("Not handling <value> %v" +
+                    " (type %T)", v, v)}
             return nil, err, noEndValTag
         }
     }
 
     if typeName == "" {
-        return rtnVal, "No type found inside <value>", noEndValTag
+        return rtnVal, &XMLRPCError{Msg:"No type found inside <value>"},
+        noEndValTag
     }
 
-    return rtnVal, XMLRPCError(fmt.Sprintf("Closing tag not found for <%s>",
-        typeName)), noEndValTag
+    return rtnVal, &XMLRPCError{Msg:fmt.Sprintf("Closing tag not found for" +
+        " <%s>", typeName)}, noEndValTag
 }
 
-func Unmarshal(r io.Reader, isResp bool) (interface{}, XMLRPCError) {
+func Unmarshal(r io.Reader, isResp bool) (interface{}, *XMLRPCError) {
     p := xml.NewParser(r)
 
     state := psMethod
@@ -194,7 +198,7 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, XMLRPCError) {
         }
 
         if err != nil {
-            return rtnVal, XMLRPCError(err.String())
+            return rtnVal, &XMLRPCError{Msg:err.String()}
         }
 
         //fmt.Printf("ps %s key %s wantEnd %v tok %v<%T>\n", state, stateKey,
@@ -207,10 +211,10 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, XMLRPCError) {
                     state += 1
                     stateKey, wantEnd = getStateVals(state, isResp)
                 } else {
-                    var rtnErr XMLRPCError
+                    var rtnErr *XMLRPCError
                     var sawEndValTag bool
                     rtnVal, rtnErr, sawEndValTag = unmarshalValue(p)
-                    if rtnErr != "" {
+                    if rtnErr != nil {
                         return nil, rtnErr
                     }
                     if ! sawEndValTag {
@@ -221,8 +225,8 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, XMLRPCError) {
                     stateKey, wantEnd = getStateVals(state, isResp)
                 }
             } else {
-                err := XMLRPCError(fmt.Sprintf("Unexpected <%s> token for" +
-                    " state %s", v.Name.Local, state))
+                err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected <%s> token" +
+                        " for state %s", v.Name.Local, state)}
                 return nil, err
             }
         case xml.EndElement:
@@ -233,31 +237,31 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, XMLRPCError) {
                 state = psEndMethod
                 stateKey, wantEnd = getStateVals(state, isResp)
             } else {
-                err := XMLRPCError(fmt.Sprintf("Unexpected </%s> token for" +
-                    " state %s", v.Name.Local, state))
+                err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected </%s> token" +
+                        " for state %s", v.Name.Local, state)}
                 return nil, err
             }
         case xml.CharData:
             for _, c := range v {
                 if !isSpace(c) {
-                    err := XMLRPCError(fmt.Sprintf("Found non-whitespace" +
-                        " chars for state %s", state))
+                    err := &XMLRPCError{Msg:fmt.Sprintf("Found non-whitespace" +
+                            " chars for state %s", state)}
                     return nil, err
                 }
             }
         case xml.ProcInst:
             // ignored
         default:
-            err := XMLRPCError(fmt.Sprintf("Not handling %v (type %T) for" +
-                " state %s", v, v, state))
+            err := &XMLRPCError{Msg:fmt.Sprintf("Not handling %v (type %T)" +
+                    " for state %s", v, v, state)}
             return nil, err
         }
     }
 
-    return rtnVal, ""
+    return rtnVal, nil
 }
 
-func UnmarshalString(s string, isResp bool) (interface{}, XMLRPCError) {
+func UnmarshalString(s string, isResp bool) (interface{}, *XMLRPCError) {
     return Unmarshal(strings.NewReader(s), isResp)
 }
 
