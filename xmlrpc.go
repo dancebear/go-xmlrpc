@@ -104,8 +104,7 @@ func parseValue(p *xml.Parser) (interface{}, string, bool) {
         }
 
         if err != nil {
-            fmt.Fprintf(os.Stderr, "Token returned %v", err)
-            os.Exit(1)
+            return rtnVal, err.String(), noEndValTag
         }
 
         switch v := tok.(type) {
@@ -178,8 +177,7 @@ func Parse(r io.Reader, isResp bool) (interface{}, string) {
         }
 
         if err != nil {
-            fmt.Fprintf(os.Stderr, "Token returned %v", err)
-            os.Exit(1)
+            return rtnVal, err.String()
         }
 
         //fmt.Printf("ps %s key %s wantEnd %v tok %v<%T>\n", state, stateKey,
