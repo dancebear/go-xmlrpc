@@ -19,12 +19,18 @@ func parseAndCheck(t *testing.T, typeName string, expVal interface{},
         t.Fatalf("Returned error %s", err)
     }
 
-    if reflect.Typeof(val) != reflect.Typeof(expVal) {
-        t.Fatalf("Returned type %T, not %s", val, typeName)
-    }
+    if expVal == nil {
+        if val != nil {
+            t.Fatalf("Got unexpected value %v <%T>", val, val)
+        }
+    } else {
+        if reflect.Typeof(val) != reflect.Typeof(expVal) {
+            t.Fatalf("Returned type %T, not %s", val, typeName)
+        }
 
-    if ! reflect.DeepEqual(val, expVal) {
-        t.Fatalf("Returned value %v, not %v", val, expVal)
+        if ! reflect.DeepEqual(val, expVal) {
+            t.Fatalf("Returned value %v, not %v", val, expVal)
+        }
     }
 }
 
@@ -50,8 +56,6 @@ func wrapType(typeName string, s string, isResp bool) string {
 }
 
 func TestParseResponseNoData(t *testing.T) {
-    const typeName = "string"
-
     xmlStr := `
 <?xml version='1.0'?>
 <methodResponse>
@@ -59,14 +63,7 @@ func TestParseResponseNoData(t *testing.T) {
   </params>
 </methodResponse>`
 
-    val, err := ParseString(xmlStr, true)
-    if err != "" {
-        t.Fatalf("Returned error %s", err)
-    }
-
-    if val != nil {
-        t.Fatalf("Got unexpected value %v <%T>", val, val)
-    }
+    parseAndCheck(t, "string", nil, true, xmlStr)
 }
 
 func TestParseResponseBool(t *testing.T) {
@@ -82,19 +79,7 @@ func TestParseResponseBool(t *testing.T) {
 
     xmlStr := wrapType(typeName, boolStr, true)
 
-    val, err := ParseString(xmlStr, true)
-    if err != "" {
-        t.Fatalf("Returned error %s", err)
-    }
-
-    i, ok := val.(bool)
-    if ! ok {
-        t.Fatalf("Returned type %T, not %s", val, typeName)
-    }
-
-    if i != expVal {
-        t.Fatalf("Returned value %v, not %v", i, expVal)
-    }
+    parseAndCheck(t, typeName, expVal, true, xmlStr)
 }
 
 func TestParseResponseInt(t *testing.T) {
@@ -110,7 +95,6 @@ func TestParseResponseString(t *testing.T) {
 }
 
 func TestParseResponseRawString(t *testing.T) {
-    const typeName = "string"
     const expVal = "abc123"
 
     xmlStr := fmt.Sprintf(`
@@ -123,19 +107,7 @@ func TestParseResponseRawString(t *testing.T) {
   </params>
 </methodResponse>`, expVal)
 
-    val, err := ParseString(xmlStr, true)
-    if err != "" {
-        t.Fatalf("Returned error %s", err)
-    }
-
-    i, ok := val.(string)
-    if ! ok {
-        t.Fatalf("Returned type %T, not %s", val, typeName)
-    }
-
-    if i != expVal {
-        t.Fatalf("Returned value %v, not %v", i, expVal)
-    }
+    parseAndCheck(t, "string", expVal, true, xmlStr)
 }
 
 func TestParseResponseDouble(t *testing.T) {
