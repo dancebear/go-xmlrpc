@@ -94,6 +94,10 @@ func TestParseResponseString(t *testing.T) {
     wrapAndParse(t, "string", "abc123", true)
 }
 
+func TestParseResponseStringEmpty(t *testing.T) {
+    wrapAndParse(t, "string", "", true)
+}
+
 func TestParseResponseStringRaw(t *testing.T) {
     const expVal = "abc123"
 
@@ -110,8 +114,20 @@ func TestParseResponseStringRaw(t *testing.T) {
     parseAndCheck(t, "string", expVal, true, xmlStr)
 }
 
-func TestParseResponseStringEmpty(t *testing.T) {
-    wrapAndParse(t, "string", "", true)
+func TestParseResponseStringRawEmpty(t *testing.T) {
+    const expVal = ""
+
+    xmlStr := fmt.Sprintf(`
+<?xml version='1.0'?>
+<methodResponse>
+  <params>
+    <param>
+      <value>%s</value>
+    </param>
+  </params>
+</methodResponse>`, expVal)
+
+    parseAndCheck(t, "string", expVal, true, xmlStr)
 }
 
 func TestParseResponseDouble(t *testing.T) {

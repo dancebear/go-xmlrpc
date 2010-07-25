@@ -91,9 +91,11 @@ func getValue(typeName string, b []byte) (interface{}, string) {
     return nil, fmt.Sprintf("Unknown type <%s> for \"%s\"", typeName, valStr)
 }
 
-func parseValue(p *xml.Parser) (interface{}, string) {
+func parseValue(p *xml.Parser) (interface{}, string, bool) {
     var typeName string
     var rtnVal interface{}
+
+    const noEndValTag = false
 
     for {
         tok, err := p.Token()
@@ -110,24 +112,28 @@ func parseValue(p *xml.Parser) (interface{}, string) {
         case xml.StartElement:
             if typeName != "" {
                 return nil, fmt.Sprintf("Found multiple types (%s and %s)" +
-                    " inside <value>", typeName, v.Name.Local)
+                    " inside <value>", typeName, v.Name.Local), noEndValTag
             }
 
             typeName = v.Name.Local
         case xml.EndElement:
-            if typeName != v.Name.Local {
-                return nil, fmt.Sprintf("Found unexpected </%s>", v.Name.Local)
+            if typeName == "" && v.Name.Local == "value" {
+                return "", "", true
+            } else if typeName != v.Name.Local {
+                return nil, fmt.Sprintf("Found unexpected </%s> (wanted </%s>)",
+                    v.Name.Local, typeName), noEndValTag
             }
+
             if typeName == "string" && rtnVal == nil {
                 rtnVal = ""
             }
-            return rtnVal, ""
+            return rtnVal, "", noEndValTag
         case xml.CharData:
             if typeName != "" && rtnVal == nil {
                 var valErr string
                 rtnVal, valErr = getValue(typeName, v)
                 if valErr != "" {
-                    return rtnVal, valErr
+                    return rtnVal, valErr, noEndValTag
                 }
             } else {
                 for _, c := range v {
@@ -135,23 +141,26 @@ func parseValue(p *xml.Parser) (interface{}, string) {
                         if rtnVal == nil {
                             var valErr string
                             rtnVal, valErr = getValue("string", v)
-                            return rtnVal, valErr
+                            return rtnVal, valErr, noEndValTag
                         }
 
-                        return nil, "Found non-whitespace chars inside <value>"
+                        return nil, "Found non-whitespace chars inside <value>",
+                        noEndValTag
                     }
                 }
             }
         default:
-            return nil, fmt.Sprintf("Not handling <value> %v (type %T)", v, v)
+            return nil, fmt.Sprintf("Not handling <value> %v (type %T)", v, v),
+            noEndValTag
         }
     }
 
     if typeName == "" {
-        return rtnVal, "No type found inside <value>"
+        return rtnVal, "No type found inside <value>", noEndValTag
     }
 
-    return rtnVal, fmt.Sprintf("Closing tag not found for <%s>", typeName)
+    return rtnVal, fmt.Sprintf("Closing tag not found for <%s>", typeName),
+    noEndValTag
 }
 
 func Parse(r io.Reader, isResp bool) (interface{}, string) {
@@ -184,11 +193,16 @@ func Parse(r io.Reader, isResp bool) (interface{}, string) {
                     stateKey, wantEnd = getStateVals(state, isResp)
                 } else {
                     var rtnErr string
-                    rtnVal, rtnErr = parseValue(p)
+                    var sawEndValTag bool
+                    rtnVal, rtnErr, sawEndValTag = parseValue(p)
                     if rtnErr != "" {
                         return nil, rtnErr
                     }
-                    state += 1
+                    if ! sawEndValTag {
+                        state += 1
+                    } else {
+                        state = psEndParam
+                    }
                     stateKey, wantEnd = getStateVals(state, isResp)
                 }
             } else {
