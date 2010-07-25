@@ -6,17 +6,25 @@ import (
     "testing"
 )
 
-func wrapAndParse(t *testing.T, typeName string, expVal interface{},
-    isResp bool) {
-    xmlStr := wrapType(typeName, fmt.Sprintf("%v", expVal), isResp)
-    parseAndCheck(t, typeName, expVal, isResp, xmlStr)
+func wrapAndParse(t *testing.T, methodName string, typeName string,
+    expVal interface{}) {
+    xmlStr := wrapType(methodName, typeName, fmt.Sprintf("%v", expVal))
+    parseAndCheck(t, methodName, typeName, expVal, xmlStr)
 }
 
-func parseAndCheck(t *testing.T, typeName string, expVal interface{},
-    isResp bool, xmlStr string) {
-    val, err := UnmarshalString(xmlStr, isResp)
+func parseAndCheck(t *testing.T, methodName string, typeName string,
+    expVal interface{}, xmlStr string) {
+    name, val, err := UnmarshalString(xmlStr)
     if err != nil {
         t.Fatalf("Returned error %s", err)
+    }
+
+    if name != methodName {
+        if methodName == "" {
+            t.Fatal("Did not expect method name \"%s\"", name)
+        } else {
+            t.Fatal("Expected method name \"%s\", not \"%s\"", methodName, name)
+        }
     }
 
     if expVal == nil {
@@ -34,12 +42,20 @@ func parseAndCheck(t *testing.T, typeName string, expVal interface{},
     }
 }
 
-func parseUnimplemented(t *testing.T, typeName string, expVal interface{},
-    isResp bool) {
-    xmlStr := wrapType(typeName, fmt.Sprintf("%v", expVal), isResp)
-    val, err := UnmarshalString(xmlStr, isResp)
+func parseUnimplemented(t *testing.T, methodName string, typeName string,
+    expVal interface{}) {
+    xmlStr := wrapType(methodName, typeName, fmt.Sprintf("%v", expVal))
+    name, val, err := UnmarshalString(xmlStr)
     if err == nil || err.Msg != "Unimplemented" {
         t.Fatalf("Returned unexpected error %s", err)
+    }
+
+    if name != methodName {
+        if methodName == "" {
+            t.Fatal("Did not expect method name \"%s\"", name)
+        } else {
+            t.Fatal("Expected method name \"%s\", not \"%s\"", methodName, name)
+        }
     }
 
     if val != nil {
@@ -47,17 +63,20 @@ func parseUnimplemented(t *testing.T, typeName string, expVal interface{},
     }
 }
 
-func wrapType(typeName string, s string, isResp bool) string {
-    var rKey string
-    if isResp {
-        rKey = "Response"
+func wrapType(methodName string, typeName string, s string) string {
+    var frontStr, backStr string
+    if methodName == "" {
+        frontStr = "<methodResponse>"
+        backStr = "</methodResponse>"
     } else {
-        rKey = "Request"
+        frontStr = fmt.Sprintf("<methodCall><methodName>%s</methodName>",
+            methodName)
+        backStr = "</methodCall>"
     }
 
     return fmt.Sprintf(`
 <?xml version='1.0'?>
-<method%s>
+%s
   <params>
     <param>
       <value>
@@ -65,11 +84,11 @@ func wrapType(typeName string, s string, isResp bool) string {
       </value>
     </param>
   </params>
-</method%s>`, rKey, typeName, s, typeName, rKey)
+%s`, frontStr, typeName, s, typeName, backStr)
 }
 
 func TestParseRequestInt(t *testing.T) {
-    wrapAndParse(t, "int", 54321, false)
+    wrapAndParse(t, "foo", "int", 54321)
 }
 
 func TestParseResponseNoData(t *testing.T) {
@@ -80,16 +99,16 @@ func TestParseResponseNoData(t *testing.T) {
   </params>
 </methodResponse>`
 
-    parseAndCheck(t, "string", nil, true, xmlStr)
+    parseAndCheck(t, "", "string", nil, xmlStr)
 }
 
 func TestParseResponseArray(t *testing.T) {
     var array = []int { 1, -1, 0, 1234567 }
-    parseUnimplemented(t, "array", array, true)
+    parseUnimplemented(t, "", "array", array)
 }
 
 func TestParseResponseBase64(t *testing.T) {
-    parseUnimplemented(t, "base64", "eW91IGNhbid0IHJlYWQgdGhpcyE", true)
+    parseUnimplemented(t, "", "base64", "eW91IGNhbid0IHJlYWQgdGhpcyE")
 }
 
 func TestParseResponseBool(t *testing.T) {
@@ -103,33 +122,33 @@ func TestParseResponseBool(t *testing.T) {
         boolStr = "0"
     }
 
-    xmlStr := wrapType(typeName, boolStr, true)
+    xmlStr := wrapType("", typeName, boolStr)
 
-    parseAndCheck(t, typeName, expVal, true, xmlStr)
+    parseAndCheck(t, "", typeName, expVal, xmlStr)
 }
 
 func TestParseResponseDatetime(t *testing.T) {
-    parseUnimplemented(t, "dateTime.iso8601", "19980717T14:08:55", true)
+    parseUnimplemented(t, "", "dateTime.iso8601", "19980717T14:08:55")
 }
 
 func TestParseResponseDouble(t *testing.T) {
-    wrapAndParse(t, "double", 123.456, true)
+    wrapAndParse(t, "", "double", 123.456)
 }
 
 func TestParseResponseInt(t *testing.T) {
-    wrapAndParse(t, "int", 1279905716, true)
+    wrapAndParse(t, "", "int", 1279905716)
 }
 
 func TestParseResponseI4(t *testing.T) {
-    wrapAndParse(t, "i4", -433221, true)
+    wrapAndParse(t, "", "i4", -433221)
 }
 
 func TestParseResponseString(t *testing.T) {
-    wrapAndParse(t, "string", "abc123", true)
+    wrapAndParse(t, "", "string", "abc123")
 }
 
 func TestParseResponseStringEmpty(t *testing.T) {
-    wrapAndParse(t, "string", "", true)
+    wrapAndParse(t, "", "string", "")
 }
 
 func TestParseResponseStringRaw(t *testing.T) {
@@ -145,7 +164,7 @@ func TestParseResponseStringRaw(t *testing.T) {
   </params>
 </methodResponse>`, expVal)
 
-    parseAndCheck(t, "string", expVal, true, xmlStr)
+    parseAndCheck(t, "", "string", expVal, xmlStr)
 }
 
 func TestParseResponseStringRawEmpty(t *testing.T) {
@@ -161,9 +180,9 @@ func TestParseResponseStringRawEmpty(t *testing.T) {
   </params>
 </methodResponse>`, expVal)
 
-    parseAndCheck(t, "string", expVal, true, xmlStr)
+    parseAndCheck(t, "", "string", expVal, xmlStr)
 }
 
 func TestParseResponseStruct(t *testing.T) {
-    parseUnimplemented(t, "struct", "eW91IGNhbid0IHJlYWQgdGhpcyE", true)
+    parseUnimplemented(t, "", "struct", "Not really a structure")
 }

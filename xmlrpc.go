@@ -25,13 +25,15 @@ func (err XMLRPCError) String() string { return err.Msg }
 
 type ParseState int
 
-var stateName = []string { "Method", "Params", "Param", "Value",
-    "EndValue", "EndParam", "EndParams", "EndMethod" }
+var stateName = []string { "Method", "MethodName", "InName", "Params",
+    "Param", "Value", "EndValue", "EndParam", "EndParams", "EndMethod" }
 
 func (ps ParseState) String() string { return stateName[ps] }
 
 const (
     psMethod ParseState = iota
+    psName
+    psInName
     psParms
     psParam
     psValue
@@ -51,8 +53,10 @@ func getStateVals(st ParseState, isResp bool) (string, bool) {
         if isResp {
             key = "methodResponse"
         } else {
-            key = "methodRequest"
+            key = "methodCall"
         }
+    case psName, psInName:
+        key = "methodName"
     case psParms, psEndParms:
         key = "params"
     case psParam, psEndParam:
@@ -163,8 +167,9 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
                             return rtnVal, valErr, noEndValTag
                         }
 
-                        err := &XMLRPCError{Msg:"Found non-whitespace chars" +
-                                " inside <value>"}
+                        err := &XMLRPCError{Msg:fmt.Sprintf("Found" +
+                                " non-whitespace chars \"%s\" inside <value>",
+                                string([]byte(v)))}
                         return nil, err, noEndValTag
                     }
                 }
@@ -185,11 +190,14 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
         " <%s>", typeName)}, noEndValTag
 }
 
-func Unmarshal(r io.Reader, isResp bool) (interface{}, *XMLRPCError) {
+func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError) {
     p := xml.NewParser(r)
 
     state := psMethod
-    stateKey, wantEnd := getStateVals(state, isResp)
+    isResp := true
+    stateKey := "???"
+    wantEnd := false
+    methodName := ""
 
     var rtnVal interface{}
 
@@ -200,7 +208,7 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, *XMLRPCError) {
         }
 
         if err != nil {
-            return rtnVal, &XMLRPCError{Msg:err.String()}
+            return methodName, rtnVal, &XMLRPCError{Msg:err.String()}
         }
 
         //fmt.Printf("ps %s key %s wantEnd %v tok %v<%T>\n", state, stateKey,
@@ -208,7 +216,21 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, *XMLRPCError) {
 
         switch v := tok.(type) {
         case xml.StartElement:
-            if v.Name.Local == stateKey && ! wantEnd {
+            if state == psMethod {
+                if v.Name.Local == "methodResponse" {
+                    state = psParms
+                    isResp = true
+                    stateKey, wantEnd = getStateVals(state, isResp)
+                } else if v.Name.Local == "methodCall" {
+                    state = psName
+                    isResp = false
+                    stateKey, wantEnd = getStateVals(state, isResp)
+                } else {
+                    err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected initial" +
+                            " tag <%s>", v.Name.Local)}
+                    return methodName, rtnVal, err
+                }
+            } else if v.Name.Local == stateKey && ! wantEnd {
                 if state != psValue {
                     state += 1
                     stateKey, wantEnd = getStateVals(state, isResp)
@@ -217,7 +239,7 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, *XMLRPCError) {
                     var sawEndValTag bool
                     rtnVal, rtnErr, sawEndValTag = unmarshalValue(p)
                     if rtnErr != nil {
-                        return nil, rtnErr
+                        return methodName, rtnVal, rtnErr
                     }
                     if ! sawEndValTag {
                         state += 1
@@ -229,10 +251,21 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, *XMLRPCError) {
             } else {
                 err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected <%s> token" +
                         " for state %s", v.Name.Local, state)}
-                return nil, err
+                return methodName, rtnVal, err
             }
         case xml.EndElement:
-            if v.Name.Local == stateKey && wantEnd {
+            if state == psEndMethod {
+                if methodName == "" {
+                    stateKey = "methodResponse"
+                } else {
+                    stateKey = "methodCall"
+                }
+                if v.Name.Local == stateKey {
+                    state += 1
+                    stateKey = "???"
+                    wantEnd = false
+                }
+            } else if v.Name.Local == stateKey && wantEnd {
                 state += 1
                 stateKey, wantEnd = getStateVals(state, isResp)
             } else if state == psParam && ! wantEnd && v.Name.Local == "params" {
@@ -241,14 +274,20 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, *XMLRPCError) {
             } else {
                 err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected </%s> token" +
                         " for state %s", v.Name.Local, state)}
-                return nil, err
+                return methodName, rtnVal, err
             }
         case xml.CharData:
-            for _, c := range v {
-                if !isSpace(c) {
-                    err := &XMLRPCError{Msg:fmt.Sprintf("Found non-whitespace" +
-                            " chars for state %s", state)}
-                    return nil, err
+            if state == psInName {
+                methodName = string([]byte(v))
+                wantEnd = true
+            } else {
+                for _, c := range v {
+                    if !isSpace(c) {
+                        err := fmt.Sprintf("Found non-whitespace" +
+                            " chars \"%s\" for state %s", string([]byte(v)),
+                            state)
+                        return methodName, rtnVal, &XMLRPCError{Msg:err}
+                    }
                 }
             }
         case xml.ProcInst:
@@ -256,15 +295,15 @@ func Unmarshal(r io.Reader, isResp bool) (interface{}, *XMLRPCError) {
         default:
             err := &XMLRPCError{Msg:fmt.Sprintf("Not handling %v (type %T)" +
                     " for state %s", v, v, state)}
-            return nil, err
+            return methodName, rtnVal, err
         }
     }
 
-    return rtnVal, nil
+    return methodName, rtnVal, nil
 }
 
-func UnmarshalString(s string, isResp bool) (interface{}, *XMLRPCError) {
-    return Unmarshal(strings.NewReader(s), isResp)
+func UnmarshalString(s string) (string, interface{}, *XMLRPCError) {
+    return Unmarshal(strings.NewReader(s))
 }
 
 /********** From request.go ************/
