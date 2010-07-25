@@ -34,6 +34,19 @@ func parseAndCheck(t *testing.T, typeName string, expVal interface{},
     }
 }
 
+func parseUnimplemented(t *testing.T, typeName string, expVal interface{},
+    isResp bool) {
+    xmlStr := wrapType(typeName, fmt.Sprintf("%v", expVal), isResp)
+    val, err := UnmarshalString(xmlStr, isResp)
+    if err != "Unimplemented" {
+        t.Fatalf("Returned unexpected error %s", err)
+    }
+
+    if val != nil {
+        t.Fatalf("Got value %v from unimplemented type", val)
+    }
+}
+
 func wrapType(typeName string, s string, isResp bool) string {
     var rKey string
     if isResp {
@@ -55,6 +68,10 @@ func wrapType(typeName string, s string, isResp bool) string {
 </method%s>`, rKey, typeName, s, typeName, rKey)
 }
 
+func TestParseRequestInt(t *testing.T) {
+    wrapAndParse(t, "int", 54321, false)
+}
+
 func TestParseResponseNoData(t *testing.T) {
     xmlStr := `
 <?xml version='1.0'?>
@@ -64,6 +81,15 @@ func TestParseResponseNoData(t *testing.T) {
 </methodResponse>`
 
     parseAndCheck(t, "string", nil, true, xmlStr)
+}
+
+func TestParseResponseArray(t *testing.T) {
+    var array = []int { 1, -1, 0, 1234567 }
+    parseUnimplemented(t, "array", array, true)
+}
+
+func TestParseResponseBase64(t *testing.T) {
+    parseUnimplemented(t, "base64", "eW91IGNhbid0IHJlYWQgdGhpcyE", true)
 }
 
 func TestParseResponseBool(t *testing.T) {
@@ -80,6 +106,14 @@ func TestParseResponseBool(t *testing.T) {
     xmlStr := wrapType(typeName, boolStr, true)
 
     parseAndCheck(t, typeName, expVal, true, xmlStr)
+}
+
+func TestParseResponseDatetime(t *testing.T) {
+    parseUnimplemented(t, "dateTime.iso8601", "19980717T14:08:55", true)
+}
+
+func TestParseResponseDouble(t *testing.T) {
+    wrapAndParse(t, "double", 123.456, true)
 }
 
 func TestParseResponseInt(t *testing.T) {
@@ -130,10 +164,6 @@ func TestParseResponseStringRawEmpty(t *testing.T) {
     parseAndCheck(t, "string", expVal, true, xmlStr)
 }
 
-func TestParseResponseDouble(t *testing.T) {
-    wrapAndParse(t, "double", 123.456, true)
-}
-
-func TestParseRequestInt(t *testing.T) {
-    wrapAndParse(t, "int", 54321, false)
+func TestParseResponseStruct(t *testing.T) {
+    parseUnimplemented(t, "struct", "eW91IGNhbid0IHJlYWQgdGhpcyE", true)
 }

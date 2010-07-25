@@ -62,7 +62,11 @@ func getStateVals(st ParseState, isResp bool) (string, bool) {
 
 func getValue(typeName string, b []byte) (interface{}, string) {
     valStr := string(b)
-    if typeName == "boolean" {
+    if typeName == "array" {
+        return nil, "Unimplemented"
+    } else if typeName == "base64" {
+        return nil, "Unimplemented"
+    } else if typeName == "boolean" {
         if valStr == "1" {
             return true, ""
         } else if valStr == "0" {
@@ -70,6 +74,8 @@ func getValue(typeName string, b []byte) (interface{}, string) {
         } else {
             return nil, fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
         }
+    } else if typeName == "dateTime.iso8601" {
+        return nil, "Unimplemented"
     } else if typeName == "double" {
         f, err := strconv.Atof(valStr)
         if err != nil {
@@ -86,6 +92,8 @@ func getValue(typeName string, b []byte) (interface{}, string) {
         return i, ""
     } else if typeName == "string" {
         return valStr, ""
+    } else if typeName == "struct" {
+        return nil, "Unimplemented"
     }
 
     return nil, fmt.Sprintf("Unknown type <%s> for \"%s\"", typeName, valStr)
