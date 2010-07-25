@@ -26,6 +26,26 @@ func wrapType(typeName string, s string, isResp bool) string {
 </method%s>`, rKey, typeName, s, typeName, rKey)
 }
 
+func TestParseResponseNoData(t *testing.T) {
+    const typeName = "string"
+
+    respText := `
+<?xml version='1.0'?>
+<methodResponse>
+  <params>
+  </params>
+</methodResponse>`
+
+    val, err := ParseString(respText, true)
+    if err != "" {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    if val != nil {
+        t.Fatalf("Got unexpected value %v <%T>", val, val)
+    }
+}
+
 func TestParseResponseBool(t *testing.T) {
     const typeName = "boolean"
     const boolVal = true
