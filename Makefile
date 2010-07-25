@@ -10,6 +10,10 @@ daqstatus: daqstatus.6
 daqstatus.6: daqstatus.go _obj/xmlrpc.a
 	6g -I _obj daqstatus.go
 
+clean_ds:
+	${RM} daqstatus
+
+clean: clean_ds
 package: xmlrpc.go
 
 TARG=xmlrpc
