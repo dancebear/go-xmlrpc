@@ -110,6 +110,10 @@ func TestParseResponseStringRaw(t *testing.T) {
     parseAndCheck(t, "string", expVal, true, xmlStr)
 }
 
+func TestParseResponseStringEmpty(t *testing.T) {
+    wrapAndParse(t, "string", "", true)
+}
+
 func TestParseResponseDouble(t *testing.T) {
     wrapAndParse(t, "double", 123.456, true)
 }

@@ -118,6 +118,9 @@ func parseValue(p *xml.Parser) (interface{}, string) {
             if typeName != v.Name.Local {
                 return nil, fmt.Sprintf("Found unexpected </%s>", v.Name.Local)
             }
+            if typeName == "string" && rtnVal == nil {
+                rtnVal = ""
+            }
             return rtnVal, ""
         case xml.CharData:
             if typeName != "" && rtnVal == nil {
