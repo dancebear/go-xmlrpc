@@ -94,7 +94,7 @@ func TestParseResponseString(t *testing.T) {
     wrapAndParse(t, "string", "abc123", true)
 }
 
-func TestParseResponseRawString(t *testing.T) {
+func TestParseResponseStringRaw(t *testing.T) {
     const expVal = "abc123"
 
     xmlStr := fmt.Sprintf(`
