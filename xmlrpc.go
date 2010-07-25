@@ -91,7 +91,7 @@ func getValue(typeName string, b []byte) (interface{}, string) {
     return nil, fmt.Sprintf("Unknown type <%s> for \"%s\"", typeName, valStr)
 }
 
-func parseValue(p *xml.Parser) (interface{}, string, bool) {
+func unmarshalValue(p *xml.Parser) (interface{}, string, bool) {
     var typeName string
     var rtnVal interface{}
 
@@ -162,7 +162,7 @@ func parseValue(p *xml.Parser) (interface{}, string, bool) {
     noEndValTag
 }
 
-func Parse(r io.Reader, isResp bool) (interface{}, string) {
+func Unmarshal(r io.Reader, isResp bool) (interface{}, string) {
     p := xml.NewParser(r)
 
     state := psMethod
@@ -192,7 +192,7 @@ func Parse(r io.Reader, isResp bool) (interface{}, string) {
                 } else {
                     var rtnErr string
                     var sawEndValTag bool
-                    rtnVal, rtnErr, sawEndValTag = parseValue(p)
+                    rtnVal, rtnErr, sawEndValTag = unmarshalValue(p)
                     if rtnErr != "" {
                         return nil, rtnErr
                     }
@@ -236,8 +236,8 @@ func Parse(r io.Reader, isResp bool) (interface{}, string) {
     return rtnVal, ""
 }
 
-func ParseString(s string, isResp bool) (interface{}, string) {
-    return Parse(strings.NewReader(s), isResp)
+func UnmarshalString(s string, isResp bool) (interface{}, string) {
+    return Unmarshal(strings.NewReader(s), isResp)
 }
 
 /********** From request.go ************/

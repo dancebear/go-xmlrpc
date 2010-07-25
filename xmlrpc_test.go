@@ -14,7 +14,7 @@ func wrapAndParse(t *testing.T, typeName string, expVal interface{},
 
 func parseAndCheck(t *testing.T, typeName string, expVal interface{},
     isResp bool, xmlStr string) {
-    val, err := ParseString(xmlStr, isResp)
+    val, err := UnmarshalString(xmlStr, isResp)
     if err != "" {
         t.Fatalf("Returned error %s", err)
     }
