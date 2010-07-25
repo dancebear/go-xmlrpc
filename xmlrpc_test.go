@@ -78,7 +78,7 @@ func TestParseResponseInt(t *testing.T) {
     const typeName = "int"
     const intVal = 1279905716
 
-    respText := wrapType(typeName, fmt.Sprintf("%d", intVal), true)
+    respText := wrapType(typeName, fmt.Sprintf("%v", intVal), true)
 
     val, err := ParseString(respText, true)
     if err != "" {
@@ -99,7 +99,7 @@ func TestParseResponseI4(t *testing.T) {
     const typeName = "i4"
     const i4Val = -433221
 
-    respText := wrapType(typeName, fmt.Sprintf("%d", i4Val), true)
+    respText := wrapType(typeName, fmt.Sprintf("%v", i4Val), true)
 
     val, err := ParseString(respText, true)
     if err != "" {
@@ -170,7 +170,7 @@ func TestParseResponseDouble(t *testing.T) {
     const typeName = "double"
     const fltVal = 123.456
 
-    respText := wrapType(typeName, fmt.Sprintf("%f", fltVal), true)
+    respText := wrapType(typeName, fmt.Sprintf("%v", fltVal), true)
 
     val, err := ParseString(respText, true)
     if err != "" {
@@ -191,7 +191,7 @@ func TestParseRequestInt(t *testing.T) {
     const typeName = "int"
     const intVal = 54321
 
-    respText := wrapType(typeName, fmt.Sprintf("%d", intVal), false)
+    respText := wrapType(typeName, fmt.Sprintf("%v", intVal), false)
 
     val, err := ParseString(respText, false)
     if err != "" {
