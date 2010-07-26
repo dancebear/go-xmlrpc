@@ -310,6 +310,16 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
     var valStr string
 
     switch val := xval.(type) {
+    case bool:
+        var bval int
+        if val {
+            bval = 1
+        } else {
+            bval = 0
+        }
+        valStr = fmt.Sprintf("<boolean>%d</boolean>", bval)
+    case float:
+        valStr = fmt.Sprintf("<double>%f</double>", val)
     case int:
         valStr = fmt.Sprintf("<int>%d</int>", val)
     default:

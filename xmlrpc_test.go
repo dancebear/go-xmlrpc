@@ -88,6 +88,44 @@ func wrapType(methodName string, typeName string, s string) string {
 `, frontStr, typeName, s, typeName, backStr)
 }
 
+func TestMakeRequestBool(t *testing.T) {
+    expVal := true
+    methodName := "foo"
+
+    xmlStr, err := Marshal(methodName, expVal)
+    if err != nil {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    var wrapVal int
+    if expVal {
+        wrapVal = 1
+    } else {
+        wrapVal = 0
+    }
+
+    expStr := wrapType(methodName, "boolean", fmt.Sprintf("%v", wrapVal))
+    if xmlStr != expStr {
+        t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
+    }
+}
+
+func TestMakeRequestDouble(t *testing.T) {
+    expVal := 123.123
+    methodName := "foo"
+
+    xmlStr, err := Marshal(methodName, expVal)
+    if err != nil {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    // hack to make float values match
+    expStr := wrapType(methodName, "double", fmt.Sprintf("%v001", expVal))
+    if xmlStr != expStr {
+        t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
+    }
+}
+
 func TestMakeRequestInt(t *testing.T) {
     expVal := 123456
     methodName := "foo"
