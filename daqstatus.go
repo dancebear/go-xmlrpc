@@ -7,21 +7,24 @@ import (
 )
 
 func main() {
-    body := "<?xml version=\"1.0\"?>\n<methodCall>\n<methodName>rpc_ping</methodName>\n<params>\n</params>\n</methodCall>\n"
-    //t := "<?xml version='1.0'?>\n<methodCall>\n<methodName>rpc_ping</methodName>\n<params>\n</params>\n</methodCall>\n"
+    body, berr := xmlrpc.Marshal("rpc_ping")
+    if berr != nil {
+        fmt.Fprintf(os.Stderr, "Marshal failed: %v\n", berr)
+    }
+
     r, err := xmlrpc.PostString("http://localhost:8080", "text/xml", body)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "PostString failed: %v", err)
+        fmt.Fprintf(os.Stderr, "PostString failed: %v\n", err)
         os.Exit(1)
     } else if r == nil {
-        fmt.Fprintf(os.Stderr, "PostString returned nil response")
+        fmt.Fprintf(os.Stderr, "PostString returned nil response\n")
         os.Exit(1)
     }
 
     //io.Copy(os.Stdout, r.Body)
-    pval, perr := xmlrpc.Parse(r.Body, true)
-    if len(perr) != 0 {
-        fmt.Fprintf(os.Stderr, "%s\n", perr)
+    _, pval, perr := xmlrpc.Unmarshal(r.Body)
+    if perr != nil {
+        fmt.Fprintf(os.Stderr, "%v\n", perr)
         os.Exit(1)
     }
 
