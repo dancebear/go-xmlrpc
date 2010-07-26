@@ -28,11 +28,9 @@ func main() {
         os.Exit(1)
     }
 
-    fmt.Printf("XML-RPC returned %v <%T>\n", pval, pval)
-
     if r.Close {
-        fmt.Printf("Closing ...")
         r.Body.Close()
-        fmt.Printf(" done\n")
     }
+
+    fmt.Printf("rpc_ping returned %v <%T>\n", pval, pval)
 }
