@@ -6,9 +6,19 @@ import (
     "testing"
 )
 
-func getTypeString(val interface{}) string {
-    pre := "\n        "
-    post := "\n      "
+func getTypeString(val interface{}, noSpaces bool) string {
+    preSpace := "\n        "
+    postSpace := "\n      "
+
+    var pre, post string
+    if noSpaces {
+        pre = ""
+        post = ""
+    } else {
+        pre = preSpace
+        post = postSpace
+    }
+
     switch v := val.(type) {
     case bool:
         var bVal int
@@ -32,11 +42,26 @@ func getTypeString(val interface{}) string {
         return fmt.Sprintf("%s<int>%d</int>%s", pre, v, post)
     case string:
         return v
+    case (map[string]interface{}):
+        valStr := fmt.Sprintf("%s<struct>", preSpace)
+        for mkey, mval := range v {
+            valStr += fmt.Sprintf(`
+          <member>
+            <name>%s</name>
+            <value>%v</value>
+          </member>`, mkey, getTypeString(mval, true))
+        }
+        valStr += fmt.Sprintf("%s</struct>%s", preSpace, postSpace)
+        return valStr
+    case ([]interface{}):
+        fmt.Printf("XXX array\n")
     }
 
     valKind := reflect.Typeof(val).Kind()
     if valKind == reflect.Array || valKind == reflect.Slice {
         return "<array>foo</array>"
+    } else {
+        fmt.Printf("Not handling Kind %v\n", valKind)
     }
 
     return fmt.Sprintf("<???>%v(%T)</???>", val, val)
@@ -46,6 +71,7 @@ func parseAndCheck(t *testing.T, methodName string, expVal interface{},
     xmlStr string) {
     name, val, err := UnmarshalString(xmlStr)
     if err != nil {
+        fmt.Printf("%s\n", xmlStr)
         t.Fatalf("Returned error %s", err)
     }
 
@@ -118,7 +144,7 @@ func wrapMethod(methodName string, val interface{}) string {
     </param>
   </params>
 %s
-`, frontStr, getTypeString(val), backStr)
+`, frontStr, getTypeString(val, false), backStr)
 }
 
 func TestMakeRequestBool(t *testing.T) {
@@ -279,7 +305,8 @@ func TestParseResponseStringRawEmpty(t *testing.T) {
 }
 
 func TestParseResponseStruct(t *testing.T) {
-    tnm := "struct"
-    val := "Bad value"
-    parseUnimplemented(t, "", fmt.Sprintf("<%s>%v</%s>", tnm, val, tnm))
+    structMap := map[string]interface{} {
+        "boolVal":true, "intVal":18, "strVal":"foo",
+    }
+    wrapAndParse(t, "", structMap)
 }

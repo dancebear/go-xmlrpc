@@ -43,6 +43,26 @@ const (
     psEndMethod
 )
 
+type StructState int
+
+var ssStrings = []string { "Initial", "Member", "Name", "InName", "EndName",
+    "Value", "InValue", "EndValue", "EndMember", "EndStruct", "???", }
+
+func (ss StructState) String() string { return ssStrings[ss] }
+
+const (
+    stInitial = iota
+    stMember
+    stName
+    stInName
+    stEndName
+    stValue
+    stInValue
+    stEndValue
+    stEndMember
+    stEndStruct
+)
+
 func getStateVals(st ParseState, isResp bool) (string, bool) {
     isEnd := (st == psEndMethod || st == psEndParms || st == psEndParam ||
         st == psEndValue)
@@ -70,47 +90,168 @@ func getStateVals(st ParseState, isResp bool) (string, bool) {
     return tag, isEnd
 }
 
-func getValue(typeName string, b []byte) (interface{}, *XMLRPCError) {
+func getNextStructState(state StructState) (StructState, string, bool) {
+    state += 1
+    var stateTag string
+    isEnd := state == stEndName || state == stEndValue ||
+        state == stEndMember || state == stEndStruct
+
+    switch state {
+    case stMember, stEndMember:
+        stateTag = "member"
+    case stName, stEndName:
+        stateTag = "name"
+    case stValue, stEndValue:
+        stateTag = "value"
+    case stEndStruct:
+        stateTag = "struct"
+    default:
+        stateTag = ""
+    }
+
+    return state, stateTag, isEnd
+}
+
+func parseStruct(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
+    state, stateTag, wantEnd := getNextStructState(stInitial)
+
+    key := ""
+
+    valMap := make(map[string]interface{})
+
+    finished := false
+    for ! finished {
+        tok, err := p.Token()
+        if tok == nil {
+            break
+        }
+
+        if err != nil {
+            return nil, &XMLRPCError{Msg:err.String()}, false
+        }
+
+        const debug = false
+        if debug {
+            var tokStr string
+            if t2, ok := tok.(xml.CharData); ok {
+                tokStr = string([]byte(t2))
+            } else {
+                tokStr = fmt.Sprintf("%v", tok)
+            }
+
+            fmt.Printf("st %v tag %s wantEnd %v tok %s<%T>\n", state, stateTag,
+                wantEnd, tokStr, tok)
+        }
+
+        switch v := tok.(type) {
+        case xml.StartElement:
+            if wantEnd && state == stEndStruct && v.Name.Local == "member" {
+                state = stMember
+            } else if wantEnd || v.Name.Local != stateTag {
+                err := fmt.Sprintf("Expected struct tag <%s>, not <%s>",
+                    stateTag, v.Name.Local)
+                return nil, &XMLRPCError{Msg:err}, false
+            }
+
+            if state == stValue {
+                val, err, sawEndValTag := unmarshalValue(p)
+                if err != nil {
+                    return nil, err, false
+                }
+
+                valMap[key] = val
+
+                if sawEndValTag {
+                    state = stEndValue
+                } else {
+                    state = stEndValue - 1
+                }
+            }
+
+            state, stateTag, wantEnd = getNextStructState(state)
+
+        case xml.EndElement:
+            if wantEnd && state == stEndStruct && v.Name.Local == "member" {
+                state = stMember
+            } else if ! wantEnd || v.Name.Local != stateTag {
+                err := fmt.Sprintf("Expected struct tag </%s>, not </%s>",
+                    stateTag, v.Name.Local)
+                return nil, &XMLRPCError{Msg:err}, false
+            }
+
+            if state == stEndStruct {
+                finished = true
+            } else {
+                state, stateTag, wantEnd = getNextStructState(state)
+            }
+        case xml.CharData:
+            if state == stInName {
+                key = string([]byte(v))
+                state, stateTag, wantEnd = getNextStructState(state)
+            } else {
+                ignore := true
+                for _, c := range v {
+                    if !isSpace(c) {
+                        ignore = false
+                        break
+                    }
+                }
+
+                if ! ignore {
+                    err := &XMLRPCError{Msg:fmt.Sprintf("Found" +
+                            " non-whitespace chars \"%s\" inside <struct>",
+                            string([]byte(v)))}
+                    return nil, err, false
+                }
+            }
+        }
+    }
+
+    return valMap, nil, true
+}
+
+func getValue(p *xml.Parser, typeName string, b []byte) (interface{},
+    *XMLRPCError, bool) {
     var unimplemented = &XMLRPCError{Msg:"Unimplemented"}
 
     valStr := string(b)
     if typeName == "array" {
-        return nil, unimplemented
+        return nil, unimplemented, false
     } else if typeName == "base64" {
-        return nil, unimplemented
+        return nil, unimplemented, false
     } else if typeName == "boolean" {
         if valStr == "1" {
-            return true, nil
+            return true, nil, false
         } else if valStr == "0" {
-            return false, nil
+            return false, nil, false
         } else {
             msg := fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
-            return nil, &XMLRPCError{Msg:msg}
+            return nil, &XMLRPCError{Msg:msg}, false
         }
     } else if typeName == "dateTime.iso8601" {
-        return nil, unimplemented
+        return nil, unimplemented, false
     } else if typeName == "double" {
         f, err := strconv.Atof(valStr)
         if err != nil {
-            return f, &XMLRPCError{Msg:err.String()}
+            return f, &XMLRPCError{Msg:err.String()}, false
         }
 
-        return f, nil
+        return f, nil, false
     } else if typeName == "int" || typeName == "i4" {
         i, err := strconv.Atoi(valStr)
         if err != nil {
-            return i, &XMLRPCError{Msg:err.String()}
+            return i, &XMLRPCError{Msg:err.String()}, false
         }
 
-        return i, nil
+        return i, nil, false
     } else if typeName == "string" {
-        return valStr, nil
+        return valStr, nil, false
     } else if typeName == "struct" {
-        return nil, unimplemented
+        return parseStruct(p)
     }
 
     return nil, &XMLRPCError{Msg:fmt.Sprintf("Unknown type <%s> for \"%s\"",
-            typeName, valStr)}
+            typeName, valStr)}, false
 }
 
 func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
@@ -167,9 +308,14 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
         case xml.CharData:
             if typeName != "" && rtnVal == nil {
                 var valErr *XMLRPCError
-                rtnVal, valErr = getValue(typeName, v)
+                var sawEndTypeTag bool
+                rtnVal, valErr, sawEndTypeTag = getValue(p, typeName, v)
                 if valErr != nil {
                     return rtnVal, valErr, noEndValTag
+                }
+
+                if sawEndTypeTag {
+                    return rtnVal, nil, noEndValTag
                 }
             } else {
                 for _, c := range v {
