@@ -129,6 +129,19 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
             return rtnVal, &XMLRPCError{Msg:err.String()}, noEndValTag
         }
 
+        const debug = false
+        if debug {
+            var tokStr string
+            if t2, ok := tok.(xml.CharData); ok {
+                tokStr = string([]byte(t2))
+            } else {
+                tokStr = fmt.Sprintf("%v", tok)
+            }
+
+            fmt.Printf("ty %s rtn %v tok %s<%T>\n", typeName, rtnVal, tokStr,
+                tok)
+        }
+
         switch v := tok.(type) {
         case xml.StartElement:
             if typeName != "" {
