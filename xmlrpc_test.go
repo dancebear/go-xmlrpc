@@ -8,7 +8,7 @@ import (
 
 func wrapAndParse(t *testing.T, methodName string, typeName string,
     expVal interface{}) {
-    xmlStr := wrapType(methodName, typeName, fmt.Sprintf("%v", expVal))
+    xmlStr := wrapMethod(methodName, typeName, expVal)
     parseAndCheck(t, methodName, typeName, expVal, xmlStr)
 }
 
@@ -44,7 +44,7 @@ func parseAndCheck(t *testing.T, methodName string, typeName string,
 
 func parseUnimplemented(t *testing.T, methodName string, typeName string,
     expVal interface{}) {
-    xmlStr := wrapType(methodName, typeName, fmt.Sprintf("%v", expVal))
+    xmlStr := wrapMethod(methodName, typeName, expVal)
     name, val, err := UnmarshalString(xmlStr)
     if err == nil || err.Msg != "Unimplemented" {
         t.Fatalf("Returned unexpected error %s", err)
@@ -63,7 +63,7 @@ func parseUnimplemented(t *testing.T, methodName string, typeName string,
     }
 }
 
-func wrapType(methodName string, typeName string, s string) string {
+func wrapMethod(methodName string, typeName string, val interface{}) string {
     var frontStr, backStr string
     if methodName == "" {
         frontStr = "<methodResponse>"
@@ -79,12 +79,12 @@ func wrapType(methodName string, typeName string, s string) string {
   <params>
     <param>
       <value>
-        <%s>%s</%s>
+        <%s>%v</%s>
       </value>
     </param>
   </params>
 %s
-`, frontStr, typeName, s, typeName, backStr)
+`, frontStr, typeName, val, typeName, backStr)
 }
 
 func TestMakeRequestBool(t *testing.T) {
@@ -103,7 +103,7 @@ func TestMakeRequestBool(t *testing.T) {
         wrapVal = 0
     }
 
-    expStr := wrapType(methodName, "boolean", fmt.Sprintf("%v", wrapVal))
+    expStr := wrapMethod(methodName, "boolean", wrapVal)
     if xmlStr != expStr {
         t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
     }
@@ -119,7 +119,7 @@ func TestMakeRequestDouble(t *testing.T) {
     }
 
     // hack to make float values match
-    expStr := wrapType(methodName, "double", fmt.Sprintf("%v001", expVal))
+    expStr := wrapMethod(methodName, "double", fmt.Sprintf("%v001", expVal))
     if xmlStr != expStr {
         t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
     }
@@ -134,7 +134,7 @@ func TestMakeRequestInt(t *testing.T) {
         t.Fatalf("Returned error %s", err)
     }
 
-    expStr := wrapType(methodName, "int", fmt.Sprintf("%v", expVal))
+    expStr := wrapMethod(methodName, "int", expVal)
     if xmlStr != expStr {
         t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
     }
@@ -188,14 +188,14 @@ func TestParseResponseBool(t *testing.T) {
     const typeName = "boolean"
     const expVal = true
 
-    var boolStr string
+    var boolVal int
     if expVal {
-        boolStr = "1"
+        boolVal = 1
     } else {
-        boolStr = "0"
+        boolVal = 0
     }
 
-    xmlStr := wrapType("", typeName, boolStr)
+    xmlStr := wrapMethod("", typeName, boolVal)
 
     parseAndCheck(t, "", typeName, expVal, xmlStr)
 }
