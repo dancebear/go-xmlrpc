@@ -211,8 +211,18 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError) {
             return methodName, rtnVal, &XMLRPCError{Msg:err.String()}
         }
 
-        //fmt.Printf("ps %s key %s wantEnd %v tok %v<%T>\n", state, stateKey,
-        //    wantEnd, tok, tok)
+        const debug = false
+        if debug {
+            var tokStr string
+            if t2, ok := tok.(xml.CharData); ok {
+                tokStr = string([]byte(t2))
+            } else {
+                tokStr = fmt.Sprintf("%v", tok)
+            }
+
+            fmt.Printf("ps %s key %s wantEnd %v tok %s<%T>\n", state, stateKey,
+                wantEnd, tokStr, tok)
+        }
 
         switch v := tok.(type) {
         case xml.StartElement:
