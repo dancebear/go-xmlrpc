@@ -327,8 +327,7 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
         return "", &XMLRPCError{Msg:err}
     }
 
-    return fmt.Sprintf(`
-    <param>
+    return fmt.Sprintf(`    <param>
       <value>
         %s
       </value>
@@ -349,7 +348,8 @@ func Marshal(methodName string, args ... interface{}) (string, *XMLRPCError) {
     xmlStr := fmt.Sprintf(`
 <?xml version="1.0"?>
 <method%s>
-%s  <params>`, name, extra)
+%s  <params>
+`, name, extra)
 
     for _, a := range args {
         valStr, err := wrapParam(a)

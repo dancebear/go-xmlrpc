@@ -141,13 +141,35 @@ func TestMakeRequestInt(t *testing.T) {
     }
 }
 
+func TestMakeRequestNoData(t *testing.T) {
+    methodName := "foo"
+
+    xmlStr, err := Marshal(methodName)
+    if err != nil {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    expStr := fmt.Sprintf(`
+<?xml version="1.0"?>
+<methodCall>
+  <methodName>%s</methodName>
+  <params>
+  </params>
+</methodCall>
+`, methodName)
+
+    if xmlStr != expStr {
+        t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
+    }
+}
+
 func TestParseRequestInt(t *testing.T) {
     wrapAndParse(t, "foo", "int", 54321)
 }
 
 func TestParseResponseNoData(t *testing.T) {
     xmlStr := `
-<?xml version='1.0'?>
+<?xml version="1.0"?>
 <methodResponse>
   <params>
   </params>
