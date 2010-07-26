@@ -69,10 +69,11 @@ func getTypeString(val interface{}, noSpaces bool) string {
 
 func parseAndCheck(t *testing.T, methodName string, expVal interface{},
     xmlStr string) {
-    name, val, err := UnmarshalString(xmlStr)
+    name, val, err, fault := UnmarshalString(xmlStr)
     if err != nil {
-        fmt.Printf("%s\n", xmlStr)
         t.Fatalf("Returned error %s", err)
+    } else if fault != nil {
+        t.Fatalf("Returned fault %s", fault)
     }
 
     if name != methodName {
@@ -100,11 +101,15 @@ func parseAndCheck(t *testing.T, methodName string, expVal interface{},
 
 func parseUnimplemented(t *testing.T, methodName string, expVal interface{}) {
     xmlStr := wrapMethod(methodName, expVal)
-    name, val, err := UnmarshalString(xmlStr)
+    name, val, err, fault := UnmarshalString(xmlStr)
     if err == nil {
         t.Fatalf("Unimplemented type didn't return an error")
     } else if err.Msg != "Unimplemented" {
         t.Fatalf("Returned unexpected error %s", err)
+    }
+
+    if fault != nil {
+        t.Fatalf("Returned unexpected fault %s", fault)
     }
 
     if name != methodName {
@@ -254,6 +259,43 @@ func TestParseResponseDatetime(t *testing.T) {
 
 func TestParseResponseDouble(t *testing.T) {
     wrapAndParse(t, "", 123.456)
+}
+
+func TestParseResponseFault(t *testing.T) {
+    code := 1
+    msg := "Some fault"
+    xmlStr := fmt.Sprintf(`<?xml version="1.0"?>
+<methodResponse>
+  <fault>
+    <value>
+        <struct>
+          <member>
+            <name>faultCode</name>
+            <value><int>%d</int></value>
+          </member>
+          <member>
+            <name>faultString</name>
+            <value>%s</value>
+          </member>
+        </struct>
+    </value>
+  </fault>
+</methodResponse>`, code, msg)
+
+    name, _, err, fault := UnmarshalString(xmlStr)
+    if name != "" {
+        t.Fatalf("Returned name %s", name)
+    } else if err != nil {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    if fault == nil {
+        t.Fatalf("No fault was returned")
+    } else if fault.Code != code {
+        t.Fatalf("Expected fault code %d, not %d", code, fault.Code)
+    } else if fault.Msg != msg {
+        t.Fatalf("Expected fault message %s, not %s", msg, fault.Msg)
+    }
 }
 
 func TestParseResponseInt(t *testing.T) {
