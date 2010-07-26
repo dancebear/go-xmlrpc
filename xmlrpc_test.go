@@ -6,12 +6,6 @@ import (
     "testing"
 )
 
-func wrapAndParse(t *testing.T, methodName string, typeName string,
-    expVal interface{}) {
-    xmlStr := wrapMethod(methodName, typeName, expVal)
-    parseAndCheck(t, methodName, typeName, expVal, xmlStr)
-}
-
 func parseAndCheck(t *testing.T, methodName string, typeName string,
     expVal interface{}, xmlStr string) {
     name, val, err := UnmarshalString(xmlStr)
@@ -61,6 +55,12 @@ func parseUnimplemented(t *testing.T, methodName string, typeName string,
     if val != nil {
         t.Fatalf("Got value %v from unimplemented type", val)
     }
+}
+
+func wrapAndParse(t *testing.T, methodName string, typeName string,
+    expVal interface{}) {
+    xmlStr := wrapMethod(methodName, typeName, expVal)
+    parseAndCheck(t, methodName, typeName, expVal, xmlStr)
 }
 
 func wrapMethod(methodName string, typeName string, val interface{}) string {
