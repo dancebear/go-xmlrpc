@@ -162,9 +162,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
                 for _, c := range v {
                     if !isSpace(c) {
                         if rtnVal == nil {
-                            var valErr *XMLRPCError
-                            rtnVal, valErr = getValue("string", v)
-                            return rtnVal, valErr, noEndValTag
+                            return string([]byte(v)), nil, noEndValTag
                         }
 
                         err := &XMLRPCError{Msg:fmt.Sprintf("Found" +
