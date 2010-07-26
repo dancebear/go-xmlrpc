@@ -345,8 +345,7 @@ func Marshal(methodName string, args ... interface{}) (string, *XMLRPCError) {
         extra = fmt.Sprintf("  <methodName>%s</methodName>\n", methodName)
     }
 
-    xmlStr := fmt.Sprintf(`
-<?xml version="1.0"?>
+    xmlStr := fmt.Sprintf(`<?xml version="1.0"?>
 <method%s>
 %s  <params>
 `, name, extra)

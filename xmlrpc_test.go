@@ -74,8 +74,7 @@ func wrapType(methodName string, typeName string, s string) string {
         backStr = "</methodCall>"
     }
 
-    return fmt.Sprintf(`
-<?xml version="1.0"?>
+    return fmt.Sprintf(`<?xml version="1.0"?>
 %s
   <params>
     <param>
@@ -149,8 +148,7 @@ func TestMakeRequestNoData(t *testing.T) {
         t.Fatalf("Returned error %s", err)
     }
 
-    expStr := fmt.Sprintf(`
-<?xml version="1.0"?>
+    expStr := fmt.Sprintf(`<?xml version="1.0"?>
 <methodCall>
   <methodName>%s</methodName>
   <params>
@@ -168,8 +166,7 @@ func TestParseRequestInt(t *testing.T) {
 }
 
 func TestParseResponseNoData(t *testing.T) {
-    xmlStr := `
-<?xml version="1.0"?>
+    xmlStr := `<?xml version="1.0"?>
 <methodResponse>
   <params>
   </params>
@@ -230,8 +227,7 @@ func TestParseResponseStringEmpty(t *testing.T) {
 func TestParseResponseStringRaw(t *testing.T) {
     const expVal = "abc123"
 
-    xmlStr := fmt.Sprintf(`
-<?xml version='1.0'?>
+    xmlStr := fmt.Sprintf(`<?xml version='1.0'?>
 <methodResponse>
   <params>
     <param>
@@ -246,8 +242,7 @@ func TestParseResponseStringRaw(t *testing.T) {
 func TestParseResponseStringRawEmpty(t *testing.T) {
     const expVal = ""
 
-    xmlStr := fmt.Sprintf(`
-<?xml version='1.0'?>
+    xmlStr := fmt.Sprintf(`<?xml version='1.0'?>
 <methodResponse>
   <params>
     <param>
