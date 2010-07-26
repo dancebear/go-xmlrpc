@@ -2,35 +2,42 @@ package main
 
 import (
 	"fmt"
-	"os"
     "xmlrpc"
 )
 
-func main() {
-    body, berr := xmlrpc.Marshal("rpc_ping")
+func rpccall(methodName string, args ... interface{}) (interface{},
+    *xmlrpc.XMLRPCError) {
+    body, berr := xmlrpc.Marshal(methodName, args)
     if berr != nil {
-        fmt.Fprintf(os.Stderr, "Marshal failed: %v\n", berr)
+        return nil, berr
     }
 
     r, err := xmlrpc.PostString("http://localhost:8080", "text/xml", body)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "PostString failed: %v\n", err)
-        os.Exit(1)
+        return nil, &xmlrpc.XMLRPCError{Msg:err.String()}
     } else if r == nil {
-        fmt.Fprintf(os.Stderr, "PostString returned nil response\n")
-        os.Exit(1)
+        err := fmt.Sprintf("PostString for %s returned nil response\n",
+            methodName)
+        return nil, &xmlrpc.XMLRPCError{Msg:err}
     }
 
-    //io.Copy(os.Stdout, r.Body)
     _, pval, perr := xmlrpc.Unmarshal(r.Body)
-    if perr != nil {
-        fmt.Fprintf(os.Stderr, "%v\n", perr)
-        os.Exit(1)
-    }
 
     if r.Close {
         r.Body.Close()
     }
 
-    fmt.Printf("rpc_ping returned %v <%T>\n", pval, pval)
+    return pval, perr
+}
+
+func main() {
+    var pval interface{}
+    var perr *xmlrpc.XMLRPCError
+
+    pval, perr = rpccall("rpc_ping")
+    if perr != nil {
+        fmt.Printf("rpc_ping failed: %v\n", perr)
+    } else {
+        fmt.Printf("rpc_ping returned %v <%T>\n", pval, pval)
+    }
 }
