@@ -31,13 +31,15 @@ func rpccall(methodName string, args ... interface{}) (interface{},
 }
 
 func main() {
+    var methodName string
     var pval interface{}
     var perr *xmlrpc.XMLRPCError
 
-    pval, perr = rpccall("rpc_ping")
+    methodName = "rpc_ping"
+    pval, perr = rpccall(methodName)
     if perr != nil {
-        fmt.Printf("rpc_ping failed: %v\n", perr)
+        fmt.Printf("%s failed: %v\n", methodName, perr)
     } else {
-        fmt.Printf("rpc_ping returned %v <%T>\n", pval, pval)
+        fmt.Printf("%s returned %v <%T>\n", methodName, pval, pval)
     }
 }
