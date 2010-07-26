@@ -306,6 +306,56 @@ func UnmarshalString(s string) (string, interface{}, *XMLRPCError) {
     return Unmarshal(strings.NewReader(s))
 }
 
+func wrapParam(xval interface{}) (string, *XMLRPCError) {
+    var valStr string
+
+    switch val := xval.(type) {
+    case int:
+        valStr = fmt.Sprintf("<int>%d</int>", val)
+    default:
+        err := fmt.Sprintf("Not wrapping type %T (%v)", val, val)
+        return "", &XMLRPCError{Msg:err}
+    }
+
+    return fmt.Sprintf(`
+    <param>
+      <value>
+        %s
+      </value>
+    </param>
+`, valStr), nil
+}
+
+func Marshal(methodName string, args ... interface{}) (string, *XMLRPCError) {
+    var name, extra string
+    if methodName == "" {
+        name = "Response"
+        extra = ""
+    } else {
+        name = "Call"
+        extra = fmt.Sprintf("  <methodName>%s</methodName>\n", methodName)
+    }
+
+    xmlStr := fmt.Sprintf(`
+<?xml version="1.0"?>
+<method%s>
+%s  <params>`, name, extra)
+
+    for _, a := range args {
+        valStr, err := wrapParam(a)
+        if err != nil {
+            return "", err
+        }
+
+        xmlStr += valStr
+    }
+
+    xmlStr += fmt.Sprintf(`  </params>
+</method%s>
+`, name)
+    return xmlStr, nil
+}
+
 /********** From request.go ************/
 
 type badStringError struct {

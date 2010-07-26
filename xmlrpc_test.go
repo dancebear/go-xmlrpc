@@ -69,13 +69,13 @@ func wrapType(methodName string, typeName string, s string) string {
         frontStr = "<methodResponse>"
         backStr = "</methodResponse>"
     } else {
-        frontStr = fmt.Sprintf("<methodCall><methodName>%s</methodName>",
-            methodName)
+        frontStr = fmt.Sprintf(`<methodCall>
+  <methodName>%s</methodName>`, methodName)
         backStr = "</methodCall>"
     }
 
     return fmt.Sprintf(`
-<?xml version='1.0'?>
+<?xml version="1.0"?>
 %s
   <params>
     <param>
@@ -84,7 +84,23 @@ func wrapType(methodName string, typeName string, s string) string {
       </value>
     </param>
   </params>
-%s`, frontStr, typeName, s, typeName, backStr)
+%s
+`, frontStr, typeName, s, typeName, backStr)
+}
+
+func TestMakeRequestInt(t *testing.T) {
+    expVal := 123456
+    methodName := "foo"
+
+    xmlStr, err := Marshal(methodName, expVal)
+    if err != nil {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    expStr := wrapType(methodName, "int", fmt.Sprintf("%v", expVal))
+    if xmlStr != expStr {
+        t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
+    }
 }
 
 func TestParseRequestInt(t *testing.T) {
