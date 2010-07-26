@@ -25,10 +25,10 @@ func (err XMLRPCError) String() string { return err.Msg }
 
 type ParseState int
 
-var stateName = []string { "Method", "MethodName", "InName", "Params",
-    "Param", "Value", "EndValue", "EndParam", "EndParams", "EndMethod" }
+var psStrings = []string { "Method", "MethodName", "InName", "Params",
+    "Param", "Value", "EndValue", "EndParam", "EndParams", "EndMethod", "???", }
 
-func (ps ParseState) String() string { return stateName[ps] }
+func (ps ParseState) String() string { return psStrings[ps] }
 
 const (
     psMethod ParseState = iota
@@ -47,27 +47,27 @@ func getStateVals(st ParseState, isResp bool) (string, bool) {
     isEnd := (st == psEndMethod || st == psEndParms || st == psEndParam ||
         st == psEndValue)
 
-    var key string
+    var tag string
     switch st {
     case psMethod, psEndMethod:
         if isResp {
-            key = "methodResponse"
+            tag = "methodResponse"
         } else {
-            key = "methodCall"
+            tag = "methodCall"
         }
     case psName, psInName:
-        key = "methodName"
+        tag = "methodName"
     case psParms, psEndParms:
-        key = "params"
+        tag = "params"
     case psParam, psEndParam:
-        key = "param"
+        tag = "param"
     case psValue, psEndValue:
-        key = "value"
+        tag = "value"
     default:
-        key = "???"
+        tag = "???"
     }
 
-    return key, isEnd
+    return tag, isEnd
 }
 
 func getValue(typeName string, b []byte) (interface{}, *XMLRPCError) {
@@ -193,7 +193,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError) {
 
     state := psMethod
     isResp := true
-    stateKey := "???"
+    stateTag := "???"
     wantEnd := false
     methodName := ""
 
@@ -218,7 +218,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError) {
                 tokStr = fmt.Sprintf("%v", tok)
             }
 
-            fmt.Printf("ps %s key %s wantEnd %v tok %s<%T>\n", state, stateKey,
+            fmt.Printf("ps %s tag %s wantEnd %v tok %s<%T>\n", state, stateTag,
                 wantEnd, tokStr, tok)
         }
 
@@ -228,20 +228,20 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError) {
                 if v.Name.Local == "methodResponse" {
                     state = psParms
                     isResp = true
-                    stateKey, wantEnd = getStateVals(state, isResp)
+                    stateTag, wantEnd = getStateVals(state, isResp)
                 } else if v.Name.Local == "methodCall" {
                     state = psName
                     isResp = false
-                    stateKey, wantEnd = getStateVals(state, isResp)
+                    stateTag, wantEnd = getStateVals(state, isResp)
                 } else {
                     err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected initial" +
                             " tag <%s>", v.Name.Local)}
                     return methodName, rtnVal, err
                 }
-            } else if v.Name.Local == stateKey && ! wantEnd {
+            } else if v.Name.Local == stateTag && ! wantEnd {
                 if state != psValue {
                     state += 1
-                    stateKey, wantEnd = getStateVals(state, isResp)
+                    stateTag, wantEnd = getStateVals(state, isResp)
                 } else {
                     var rtnErr *XMLRPCError
                     var sawEndValTag bool
@@ -254,7 +254,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError) {
                     } else {
                         state = psEndParam
                     }
-                    stateKey, wantEnd = getStateVals(state, isResp)
+                    stateTag, wantEnd = getStateVals(state, isResp)
                 }
             } else {
                 err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected <%s> token" +
@@ -264,21 +264,21 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError) {
         case xml.EndElement:
             if state == psEndMethod {
                 if methodName == "" {
-                    stateKey = "methodResponse"
+                    stateTag = "methodResponse"
                 } else {
-                    stateKey = "methodCall"
+                    stateTag = "methodCall"
                 }
-                if v.Name.Local == stateKey {
+                if v.Name.Local == stateTag {
                     state += 1
-                    stateKey = "???"
+                    stateTag = "???"
                     wantEnd = false
                 }
-            } else if v.Name.Local == stateKey && wantEnd {
+            } else if v.Name.Local == stateTag && wantEnd {
                 state += 1
-                stateKey, wantEnd = getStateVals(state, isResp)
+                stateTag, wantEnd = getStateVals(state, isResp)
             } else if state == psParam && ! wantEnd && v.Name.Local == "params" {
                 state = psEndMethod
-                stateKey, wantEnd = getStateVals(state, isResp)
+                stateTag, wantEnd = getStateVals(state, isResp)
             } else {
                 err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected </%s> token" +
                         " for state %s", v.Name.Local, state)}
