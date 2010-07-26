@@ -240,18 +240,16 @@ func TestParseResponseStringRaw(t *testing.T) {
 }
 
 func TestParseResponseStringRawEmpty(t *testing.T) {
-    const expVal = ""
-
-    xmlStr := fmt.Sprintf(`<?xml version='1.0'?>
+    xmlStr := `<?xml version='1.0'?>
 <methodResponse>
   <params>
     <param>
-      <value>%s</value>
+      <value></value>
     </param>
   </params>
-</methodResponse>`, expVal)
+</methodResponse>`
 
-    parseAndCheck(t, "", "string", expVal, xmlStr)
+    parseAndCheck(t, "", "string", "", xmlStr)
 }
 
 func TestParseResponseStruct(t *testing.T) {
