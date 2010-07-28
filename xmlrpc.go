@@ -17,12 +17,15 @@ func isSpace(c byte) bool {
         return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
 
+// An XMLRPCError represents an internal failure in parsing or communication
 type XMLRPCError struct {
     Msg string
 }
 
 func (err XMLRPCError) String() string { return err.Msg }
 
+// An XMLRPCFault represents an error or exception in the procedure call
+// being run on the remote machine
 type XMLRPCFault struct {
     Code int
     Msg string
@@ -32,15 +35,15 @@ func (f XMLRPCFault) String() string {
     return fmt.Sprintf("%s (code#%d)", f.Msg, f.Code)
 }
 
-type ParseState int
+type parseState int
 
 var psStrings = []string { "Method", "MethodName", "InName", "Params",
     "Param", "Value", "EndValue", "EndParam", "EndParams", "EndMethod", "???", }
 
-func (ps ParseState) String() string { return psStrings[ps] }
+func (ps parseState) String() string { return psStrings[ps] }
 
 const (
-    psMethod ParseState = iota
+    psMethod parseState = iota
     psName
     psInName
     psParms
@@ -52,12 +55,12 @@ const (
     psEndMethod
 )
 
-type StructState int
+type structState int
 
 var ssStrings = []string { "Initial", "Member", "Name", "InName", "EndName",
     "Value", "InValue", "EndValue", "EndMember", "EndStruct", "???", }
 
-func (ss StructState) String() string { return ssStrings[ss] }
+func (ss structState) String() string { return ssStrings[ss] }
 
 const (
     stInitial = iota
@@ -72,7 +75,7 @@ const (
     stEndStruct
 )
 
-func getStateVals(st ParseState, isResp bool) (string, bool) {
+func getStateVals(st parseState, isResp bool) (string, bool) {
     isEnd := (st == psEndMethod || st == psEndParms || st == psEndParam ||
         st == psEndValue)
 
@@ -99,7 +102,7 @@ func getStateVals(st ParseState, isResp bool) (string, bool) {
     return tag, isEnd
 }
 
-func getNextStructState(state StructState) (StructState, string, bool) {
+func getNextStructState(state structState) (structState, string, bool) {
     state += 1
     var stateTag string
     isEnd := state == stEndName || state == stEndValue ||
@@ -356,6 +359,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
         " <%s>", typeName)}, noEndValTag
 }
 
+// Translate an XML string into a local data object
 func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
     p := xml.NewParser(r)
 
@@ -531,6 +535,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
     return methodName, rtnVal, nil, faultVal
 }
 
+// Translate an XML string into a local data object
 func UnmarshalString(s string) (string, interface{}, *XMLRPCError,
     *XMLRPCFault) {
     return Unmarshal(strings.NewReader(s))
@@ -565,6 +570,7 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
 `, valStr), nil
 }
 
+// Translate a local data object into an XML string
 func Marshal(methodName string, args ... interface{}) (string, *XMLRPCError) {
     var name, extra string
     if methodName == "" {
