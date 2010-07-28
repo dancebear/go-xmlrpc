@@ -1,5 +1,3 @@
-- Create Client object
-- get rid of PostString method
 - Use persistent HTTP connections
 - Implement Server object
 - De-hackify parsing code

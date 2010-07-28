@@ -5,39 +5,19 @@ import (
     "xmlrpc"
 )
 
-func rpccall(methodName string, args ... interface{}) (interface{},
-    *xmlrpc.XMLRPCError, *xmlrpc.XMLRPCFault) {
-    body, berr := xmlrpc.Marshal(methodName, args)
-    if berr != nil {
-        return nil, berr, nil
-    }
-
-    r, err := xmlrpc.PostString("http://localhost:8080", "text/xml", body)
-    if err != nil {
-        return nil, &xmlrpc.XMLRPCError{Msg:err.String()}, nil
-    } else if r == nil {
-        err := fmt.Sprintf("PostString for %s returned nil response\n",
-            methodName)
-        return nil, &xmlrpc.XMLRPCError{Msg:err}, nil
-    }
-
-    _, pval, perr, pfault := xmlrpc.Unmarshal(r.Body)
-
-    if r.Close {
-        r.Body.Close()
-    }
-
-    return pval, perr, pfault
-}
-
 func main() {
     var methodName string
     var pval interface{}
     var perr *xmlrpc.XMLRPCError
     var pfault *xmlrpc.XMLRPCFault
 
+    client, cerr := xmlrpc.NewClient("http://localhost:8080")
+    if cerr != nil {
+        fmt.Printf("NewClient failed: %v\n", cerr)
+    }
+
     methodName = "rpc_ping"
-    pval, perr, pfault = rpccall(methodName)
+    pval, pfault, perr = client.RPCCall(methodName)
     if perr != nil {
         fmt.Printf("%s failed: %v\n", methodName, perr)
     } else if pfault != nil {
@@ -47,7 +27,7 @@ func main() {
     }
 
     methodName = "rpc_runset_events"
-    pval, perr, pfault = rpccall(methodName, 123, 4)
+    pval, pfault, perr = client.RPCCall(methodName, 123, 4)
     if perr != nil {
         fmt.Printf("%s failed: %v\n", methodName, perr)
     } else if pfault != nil {
