@@ -19,6 +19,10 @@ func getTypeString(val interface{}, noSpaces bool) string {
         post = postSpace
     }
 
+    if val == nil {
+        return pre + "<nil/>" + post
+    }
+
     switch v := val.(type) {
     case bool:
         var bVal int
@@ -197,6 +201,21 @@ func TestMakeRequestInt(t *testing.T) {
     }
 }
 
+func TestMakeRequestNil(t *testing.T) {
+    var expVal interface{} = nil
+    methodName := "foo"
+
+    xmlStr, err := Marshal(methodName, expVal)
+    if err != nil {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    expStr := wrapMethod(methodName, expVal)
+    if xmlStr != expStr {
+        t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
+    }
+}
+
 func TestMakeRequestNoData(t *testing.T) {
     methodName := "foo"
 
@@ -298,6 +317,10 @@ func TestParseResponseI4(t *testing.T) {
 
     xmlStr := wrapMethod("", fmt.Sprintf("<%s>%v</%s>", tnm, val, tnm))
     parseAndCheck(t, "", val, xmlStr)
+}
+
+func TestParseResponseNil(t *testing.T) {
+    wrapAndParse(t, "", nil)
 }
 
 func TestParseResponseNoData(t *testing.T) {

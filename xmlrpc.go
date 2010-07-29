@@ -552,22 +552,26 @@ func UnmarshalString(s string) (string, interface{}, *XMLRPCError,
 func wrapParam(xval interface{}) (string, *XMLRPCError) {
     var valStr string
 
-    switch val := xval.(type) {
-    case bool:
-        var bval int
-        if val {
-            bval = 1
-        } else {
-            bval = 0
+    if xval == nil {
+        valStr = "<nil/>"
+    } else {
+        switch val := xval.(type) {
+        case bool:
+            var bval int
+            if val {
+                bval = 1
+            } else {
+                bval = 0
+            }
+            valStr = fmt.Sprintf("<boolean>%d</boolean>", bval)
+        case float:
+            valStr = fmt.Sprintf("<double>%f</double>", val)
+        case int:
+            valStr = fmt.Sprintf("<int>%d</int>", val)
+        default:
+            err := fmt.Sprintf("Not wrapping type %T (%v)", val, val)
+            return "", &XMLRPCError{Msg:err}
         }
-        valStr = fmt.Sprintf("<boolean>%d</boolean>", bval)
-    case float:
-        valStr = fmt.Sprintf("<double>%f</double>", val)
-    case int:
-        valStr = fmt.Sprintf("<int>%d</int>", val)
-    default:
-        err := fmt.Sprintf("Not wrapping type %T (%v)", val, val)
-        return "", &XMLRPCError{Msg:err}
     }
 
     return fmt.Sprintf(`    <param>

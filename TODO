@@ -2,6 +2,5 @@
 - Implement Server object
 - Make client.rpc_foo(1, 2, 3) do the right thing
 - De-hackify parsing code
-- Handle <nil/> datatype
 - Implement <array>, <base64>, and <dateTime.iso8601> types
 - Need to encode '<' and '&' in strings
