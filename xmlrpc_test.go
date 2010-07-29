@@ -222,16 +222,6 @@ func TestParseRequestInt(t *testing.T) {
     wrapAndParse(t, "foo", 54321)
 }
 
-func TestParseResponseNoData(t *testing.T) {
-    xmlStr := `<?xml version="1.0"?>
-<methodResponse>
-  <params>
-  </params>
-</methodResponse>`
-
-    parseAndCheck(t, "", nil, xmlStr)
-}
-
 func TestParseResponseArray(t *testing.T) {
     var array = []int { 1, -1, 0, 1234567 }
     parseUnimplemented(t, "", array)
@@ -308,6 +298,16 @@ func TestParseResponseI4(t *testing.T) {
 
     xmlStr := wrapMethod("", fmt.Sprintf("<%s>%v</%s>", tnm, val, tnm))
     parseAndCheck(t, "", val, xmlStr)
+}
+
+func TestParseResponseNoData(t *testing.T) {
+    xmlStr := `<?xml version="1.0"?>
+<methodResponse>
+  <params>
+  </params>
+</methodResponse>`
+
+    parseAndCheck(t, "", nil, xmlStr)
 }
 
 func TestParseResponseString(t *testing.T) {
