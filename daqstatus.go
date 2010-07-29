@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+    "fmt"
+    "os"
     "xmlrpc"
 )
 
@@ -14,6 +15,7 @@ func main() {
     client, cerr := xmlrpc.NewClient("http://localhost:8080")
     if cerr != nil {
         fmt.Printf("NewClient failed: %v\n", cerr)
+        os.Exit(1)
     }
 
     methodName = "rpc_ping"
