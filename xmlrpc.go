@@ -22,7 +22,12 @@ type XMLRPCError struct {
     Msg string
 }
 
-func (err XMLRPCError) String() string { return err.Msg }
+func (err *XMLRPCError) String() string {
+    if err == nil {
+        return "NilError"
+    }
+    return err.Msg
+}
 
 // An XMLRPCFault represents an error or exception in the procedure call
 // being run on the remote machine
@@ -31,7 +36,10 @@ type XMLRPCFault struct {
     Msg string
 }
 
-func (f XMLRPCFault) String() string {
+func (f *XMLRPCFault) String() string {
+    if f == nil {
+        return "NilFault"
+    }
     return fmt.Sprintf("%s (code#%d)", f.Msg, f.Code)
 }
 
