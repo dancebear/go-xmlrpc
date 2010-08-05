@@ -439,17 +439,18 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                             return methodName, rtnVal, err, nil
                         }
 
-                        
                         if fmap, ok := uVal.(map[string]interface{}); ! ok {
                             err := fmt.Sprintf("Bad type %T for fault", uVal)
-                            return methodName, rtnVal, &XMLRPCError{Msg:err}, nil
+                            return methodName, rtnVal, &XMLRPCError{Msg:err},
+                            nil
                         } else {
                             if code, ok := fmap["faultCode"].(int); ! ok {
                                 err := fmt.Sprintf("Fault code should be an" +
                                     " int, not %T", code)
                                 return methodName, rtnVal,
                                 &XMLRPCError{Msg:err}, nil
-                            } else if msg, ok := fmap["faultString"].(string); ! ok {
+                            } else if msg, ok := fmap["faultString"].(string);
+                            ! ok {
                                 err := fmt.Sprintf("Fault string should be a" +
                                     " string, not %T", msg)
                                 return methodName, rtnVal,
@@ -617,7 +618,9 @@ func Marshal(methodName string, args ... interface{}) (string, *XMLRPCError) {
 
 // Given a string of the form "host", "host:port", or "[ipv6::address]:port",
 // return true if the string includes a port.
-func hasPort(s string) bool { return strings.LastIndex(s, ":") > strings.LastIndex(s, "]") }
+func hasPort(s string) bool {
+    return strings.LastIndex(s, ":") > strings.LastIndex(s, "]")
+}
 
 
 type nopCloser struct {
@@ -670,7 +673,8 @@ func NewClient(urlStr string) (c *Client, err *XMLRPCError) {
     return &client, nil
 }
 
-func (client *Client) RPCCall(methodName string, args ... interface{}) (interface{}, *XMLRPCFault, *XMLRPCError) {
+func (client *Client) RPCCall(methodName string,
+    args ... interface{}) (interface{}, *XMLRPCFault, *XMLRPCError) {
     body, berr := Marshal(methodName, args)
     if berr != nil {
         return nil, nil, berr
