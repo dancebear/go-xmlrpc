@@ -651,7 +651,7 @@ func hasPort(s string) bool {
 
 
 type nopCloser struct {
-	io.Reader
+    io.Reader
 }
 
 func (nopCloser) Close() os.Error { return nil }
@@ -669,10 +669,10 @@ func open(url *http.URL) (net.Conn, *XMLRPCError) {
                 " not \"%s\"", url.Scheme)}
     }
 
-	addr := url.Host
-	if !hasPort(addr) {
-		addr += ":http"
-	}
+    addr := url.Host
+    if !hasPort(addr) {
+        addr += ":http"
+    }
 
     conn, cerr := net.Dial("tcp", "", addr)
     if cerr != nil {
@@ -707,16 +707,16 @@ func (client *Client) RPCCall(methodName string,
         return nil, nil, berr
     }
 
-	var req http.Request
+    var req http.Request
     req.URL = client.url
-	req.Method = "POST"
-	req.ProtoMajor = 1
-	req.ProtoMinor = 1
-	req.Close = false
-	req.Body = nopCloser{strings.NewReader(body)}
-	req.Header = map[string]string{
-		"Content-Type": "text/xml",
-	}
+    req.Method = "POST"
+    req.ProtoMajor = 1
+    req.ProtoMinor = 1
+    req.Close = false
+    req.Body = nopCloser{strings.NewReader(body)}
+    req.Header = map[string]string{
+        "Content-Type": "text/xml",
+    }
     req.RawURL = "/RPC2"
     req.ContentLength = int64(len(body))
 
@@ -727,17 +727,17 @@ func (client *Client) RPCCall(methodName string,
         }
     }
 
-	if werr := req.Write(client.conn); werr != nil {
+    if werr := req.Write(client.conn); werr != nil {
         client.conn.Close()
-		return nil, nil, &XMLRPCError{Msg:werr.String()}
-	}
+        return nil, nil, &XMLRPCError{Msg:werr.String()}
+    }
 
-	reader := bufio.NewReader(client.conn)
-	resp, rerr := http.ReadResponse(reader, req.Method)
+    reader := bufio.NewReader(client.conn)
+    resp, rerr := http.ReadResponse(reader, req.Method)
     if rerr != nil {
         client.conn.Close()
-		return nil, nil, &XMLRPCError{Msg:rerr.String()}
-	} else if resp == nil {
+        return nil, nil, &XMLRPCError{Msg:rerr.String()}
+    } else if resp == nil {
         rrerr := fmt.Sprintf("ReadResponse for %s returned nil response\n",
             methodName)
         return nil, nil, &XMLRPCError{Msg:rrerr}
