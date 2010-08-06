@@ -3,6 +3,7 @@ package xmlrpc
 import (
     //"encoding/base64"
     "bufio"
+    "container/vector"
     "fmt"
     "http"
     "io"
@@ -367,6 +368,21 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
         " <%s>", typeName)}, noEndValTag
 }
 
+func extractParams(v *vector.Vector) interface{} {
+    if v.Len() == 0 {
+        return nil
+    } else if v.Len() == 1 {
+        return v.At(0)
+    }
+
+    pList := make([]interface{}, v.Len(), v.Len())
+    for i := 0; i < v.Len(); i++ {
+        pList[i] = v.At(i)
+    }
+
+    return pList
+}
+
 // Translate an XML string into a local data object
 func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
     p := xml.NewParser(r)
@@ -377,7 +393,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
     wantEnd := false
     methodName := ""
 
-    var rtnVal interface{}
+    params := new(vector.Vector)
 
     isFault := false
     var faultVal *XMLRPCFault
@@ -389,7 +405,8 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
         }
 
         if err != nil {
-            return methodName, rtnVal, &XMLRPCError{Msg:err.String()}, faultVal
+            return methodName, extractParams(params),
+            &XMLRPCError{Msg:err.String()}, faultVal
         }
 
         const debug = false
@@ -419,7 +436,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                 } else {
                     err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected initial" +
                             " tag <%s>", v.Name.Local)}
-                    return methodName, rtnVal, err, faultVal
+                    return methodName, extractParams(params), err, faultVal
                 }
             } else if v.Name.Local == stateTag && ! wantEnd {
                 if state != psValue {
@@ -431,29 +448,30 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                     var sawEndValTag bool
                     uVal, uErr, sawEndValTag = unmarshalValue(p)
                     if uErr != nil {
-                        return methodName, rtnVal, uErr, faultVal
+                        return methodName, extractParams(params), uErr, faultVal
                     }
                     if isFault {
                         if uVal == nil {
                             err := &XMLRPCError{Msg:"No fault value returned"}
-                            return methodName, rtnVal, err, nil
+                            return methodName, extractParams(params), err, nil
                         }
 
                         if fmap, ok := uVal.(map[string]interface{}); ! ok {
                             err := fmt.Sprintf("Bad type %T for fault", uVal)
-                            return methodName, rtnVal, &XMLRPCError{Msg:err},
+                            return methodName, extractParams(params),
+                            &XMLRPCError{Msg:err},
                             nil
                         } else {
                             if code, ok := fmap["faultCode"].(int); ! ok {
                                 err := fmt.Sprintf("Fault code should be an" +
                                     " int, not %T", code)
-                                return methodName, rtnVal,
+                                return methodName, extractParams(params),
                                 &XMLRPCError{Msg:err}, nil
                             } else if msg, ok := fmap["faultString"].(string);
                             ! ok {
                                 err := fmt.Sprintf("Fault string should be a" +
                                     " string, not %T", msg)
-                                return methodName, rtnVal,
+                                return methodName, extractParams(params),
                                 &XMLRPCError{Msg:err}, nil
                             } else {
                                 faultVal = &XMLRPCFault{Code:code, Msg:msg}
@@ -469,7 +487,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                             wantEnd = true
                         }
                     } else {
-                        rtnVal = uVal
+                        params.Push(uVal)
                         if ! sawEndValTag {
                             state += 1
                         } else {
@@ -482,10 +500,14 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                 isFault = true
                 state = psValue
                 stateTag, wantEnd = getStateVals(state, isResp)
+            } else if wantEnd && state == psEndParms &&
+                v.Name.Local == "param" {
+                state = psValue
+                stateTag, wantEnd = getStateVals(state, isResp)
             } else {
                 err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected <%s> token" +
                         " for state %s", v.Name.Local, state)}
-                return methodName, rtnVal, err, faultVal
+                return methodName, extractParams(params), err, faultVal
             }
         case xml.EndElement:
             if state == psEndMethod {
@@ -515,7 +537,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
             } else {
                 err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected </%s> token" +
                         " for state %s", v.Name.Local, state)}
-                return methodName, rtnVal, err, faultVal
+                return methodName, extractParams(params), err, faultVal
             }
         case xml.CharData:
             if state == psInName {
@@ -527,7 +549,8 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                         err := fmt.Sprintf("Found non-whitespace" +
                             " chars \"%s\" for state %s", string([]byte(v)),
                             state)
-                        return methodName, rtnVal, &XMLRPCError{Msg:err},
+                        return methodName, extractParams(params),
+                        &XMLRPCError{Msg:err},
                             faultVal
                     }
                 }
@@ -537,11 +560,11 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
         default:
             err := &XMLRPCError{Msg:fmt.Sprintf("Not handling %v (type %T)" +
                     " for state %s", v, v, state)}
-            return methodName, rtnVal, err, faultVal
+            return methodName, extractParams(params), err, faultVal
         }
     }
 
-    return methodName, rtnVal, nil, faultVal
+    return methodName, extractParams(params), nil, faultVal
 }
 
 // Translate an XML string into a local data object
