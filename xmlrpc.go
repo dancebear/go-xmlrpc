@@ -3,6 +3,7 @@ package xmlrpc
 import (
     //"encoding/base64"
     "bufio"
+    "bytes"
     "container/vector"
     "fmt"
     "http"
@@ -608,19 +609,23 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
 
 // Translate a local data object into an XML string
 func Marshal(methodName string, args ... interface{}) (string, *XMLRPCError) {
-    var name, extra string
+    var name string
+    var addExtra bool
     if methodName == "" {
         name = "Response"
-        extra = ""
+        addExtra = false
     } else {
         name = "Call"
-        extra = fmt.Sprintf("  <methodName>%s</methodName>\n", methodName)
+        addExtra = true
     }
 
-    xmlStr := fmt.Sprintf(`<?xml version="1.0"?>
-<method%s>
-%s  <params>
-`, name, extra)
+    buf := bytes.NewBufferString("<?xml version=\"1.0\"?>\n")
+    fmt.Fprintf(buf, "<method%s>\n", name)
+    if addExtra {
+        fmt.Fprintf(buf, "  <methodName>%s</methodName>\n", methodName)
+    }
+
+    fmt.Fprintf(buf, "  <params>\n")
 
     for _, a := range args {
         valStr, err := wrapParam(a)
@@ -628,13 +633,12 @@ func Marshal(methodName string, args ... interface{}) (string, *XMLRPCError) {
             return "", err
         }
 
-        xmlStr += valStr
+        fmt.Fprintf(buf, valStr)
     }
 
-    xmlStr += fmt.Sprintf(`  </params>
-</method%s>
-`, name)
-    return xmlStr, nil
+    fmt.Fprintf(buf, "  </params>\n</method%s>\n", name)
+
+    return string(buf.Bytes()), nil
 }
 
 /********** From http/client.go ************/
