@@ -1,6 +1,7 @@
 package xmlrpc
 
 import (
+    "bytes"
     "fmt"
     "reflect"
     "testing"
@@ -134,26 +135,29 @@ func wrapAndParse(t *testing.T, methodName string, expVal interface{}) {
     parseAndCheck(t, methodName, expVal, xmlStr)
 }
 
-func wrapMethod(methodName string, val interface{}) string {
-    var frontStr, backStr string
+func wrapMethod(methodName string, args ... interface{}) string {
+    buf := bytes.NewBufferString("<?xml version=\"1.0\"?>\n")
+
+    var backStr string
     if methodName == "" {
-        frontStr = "<methodResponse>"
+        fmt.Fprintf(buf, "<methodResponse>\n")
         backStr = "</methodResponse>"
     } else {
-        frontStr = fmt.Sprintf(`<methodCall>
-  <methodName>%s</methodName>`, methodName)
+        fmt.Fprintf(buf, "<methodCall>\n  <methodName>%s</methodName>\n",
+            methodName)
         backStr = "</methodCall>"
     }
 
-    return fmt.Sprintf(`<?xml version="1.0"?>
-%s
-  <params>
-    <param>
+    fmt.Fprintf(buf, "  <params>\n")
+    for _, a := range args {
+        fmt.Fprintf(buf, `    <param>
       <value>%v</value>
     </param>
-  </params>
-%s
-`, frontStr, getTypeString(val, false), backStr)
+`, getTypeString(a, false))
+    }
+    fmt.Fprintf(buf, "  </params>\n%s\n", backStr)
+
+    return string(buf.Bytes())
 }
 
 func TestMakeRequestBool(t *testing.T) {
@@ -196,6 +200,23 @@ func TestMakeRequestInt(t *testing.T) {
     }
 
     expStr := wrapMethod(methodName, expVal)
+    if xmlStr != expStr {
+        t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
+    }
+}
+
+func TestMakeRequestMultiParam(t *testing.T) {
+    expVal1 := 123.456
+    expVal2 := false
+    expVal3 := 9876
+    methodName := "foo"
+
+    xmlStr, err := Marshal(methodName, expVal1, expVal2, expVal3)
+    if err != nil {
+        t.Fatalf("Returned error %s", err)
+    }
+
+    expStr := wrapMethod(methodName, expVal1, expVal2, expVal3)
     if xmlStr != expStr {
         t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
     }
