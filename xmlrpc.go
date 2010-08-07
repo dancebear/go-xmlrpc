@@ -593,6 +593,8 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
             valStr = fmt.Sprintf("<double>%f</double>", val)
         case int:
             valStr = fmt.Sprintf("<int>%d</int>", val)
+        case string:
+            valStr = fmt.Sprintf("<string>%s</string>", val)
         default:
             err := fmt.Sprintf("Not wrapping type %T (%v)", val, val)
             return "", &XMLRPCError{Msg:err}
