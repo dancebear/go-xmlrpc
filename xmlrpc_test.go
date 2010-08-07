@@ -164,7 +164,7 @@ func TestMakeRequestBool(t *testing.T) {
     expVal := true
     methodName := "foo"
 
-    xmlStr, err := Marshal(methodName, expVal)
+    xmlStr, err := MarshalToString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -179,7 +179,7 @@ func TestMakeRequestDouble(t *testing.T) {
     expVal := 123.123
     methodName := "foo"
 
-    xmlStr, err := Marshal(methodName, expVal)
+    xmlStr, err := MarshalToString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -194,7 +194,7 @@ func TestMakeRequestInt(t *testing.T) {
     expVal := 123456
     methodName := "foo"
 
-    xmlStr, err := Marshal(methodName, expVal)
+    xmlStr, err := MarshalToString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -211,7 +211,7 @@ func TestMakeRequestMultiParam(t *testing.T) {
     expVal3 := 9876
     methodName := "foo"
 
-    xmlStr, err := Marshal(methodName, expVal1, expVal2, expVal3)
+    xmlStr, err := MarshalToString(methodName, expVal1, expVal2, expVal3)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -226,7 +226,7 @@ func TestMakeRequestNil(t *testing.T) {
     var expVal interface{} = nil
     methodName := "foo"
 
-    xmlStr, err := Marshal(methodName, expVal)
+    xmlStr, err := MarshalToString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -240,7 +240,7 @@ func TestMakeRequestNil(t *testing.T) {
 func TestMakeRequestNoData(t *testing.T) {
     methodName := "foo"
 
-    xmlStr, err := Marshal(methodName)
+    xmlStr, err := MarshalToString(methodName)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }

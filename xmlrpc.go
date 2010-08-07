@@ -610,7 +610,7 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
 }
 
 // Translate a local data object into an XML string
-func Marshal(methodName string, args ... interface{}) (string, *XMLRPCError) {
+func MarshalToString(methodName string, args ... interface{}) (string, *XMLRPCError) {
     var name string
     var addExtra bool
     if methodName == "" {
@@ -704,7 +704,7 @@ func NewClient(urlStr string) (c *Client, err *XMLRPCError) {
 
 func (client *Client) RPCCall(methodName string,
     args ... interface{}) (interface{}, *XMLRPCFault, *XMLRPCError) {
-    body, berr := Marshal(methodName, args)
+    body, berr := MarshalToString(methodName, args)
     if berr != nil {
         return nil, nil, berr
     }
