@@ -611,6 +611,16 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
 
 // Translate a local data object into an XML string
 func MarshalToString(methodName string, args ... interface{}) (string, *XMLRPCError) {
+    buf := bytes.NewBufferString("")
+    err := Marshal(buf, methodName, args)
+    if err != nil {
+        return "", err
+    }
+
+    return string(buf.Bytes()), nil
+}
+
+func Marshal(w io.Writer, methodName string, args ... interface{}) *XMLRPCError {
     var name string
     var addExtra bool
     if methodName == "" {
@@ -621,26 +631,25 @@ func MarshalToString(methodName string, args ... interface{}) (string, *XMLRPCEr
         addExtra = true
     }
 
-    buf := bytes.NewBufferString("<?xml version=\"1.0\"?>\n")
-    fmt.Fprintf(buf, "<method%s>\n", name)
+    fmt.Fprintf(w, "<?xml version=\"1.0\"?>\n<method%s>\n", name)
     if addExtra {
-        fmt.Fprintf(buf, "  <methodName>%s</methodName>\n", methodName)
+        fmt.Fprintf(w, "  <methodName>%s</methodName>\n", methodName)
     }
 
-    fmt.Fprintf(buf, "  <params>\n")
+    fmt.Fprintf(w, "  <params>\n")
 
     for _, a := range args {
         valStr, err := wrapParam(a)
         if err != nil {
-            return "", err
+            return err
         }
 
-        fmt.Fprintf(buf, valStr)
+        fmt.Fprintf(w, valStr)
     }
 
-    fmt.Fprintf(buf, "  </params>\n</method%s>\n", name)
+    fmt.Fprintf(w, "  </params>\n</method%s>\n", name)
 
-    return string(buf.Bytes()), nil
+    return nil
 }
 
 /********** From http/client.go ************/
