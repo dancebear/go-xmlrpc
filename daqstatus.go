@@ -2,7 +2,6 @@ package main
 
 import (
     "fmt"
-    "os"
     "xmlrpc"
 )
 
@@ -15,7 +14,7 @@ func runClient(port int) {
     client, cerr := xmlrpc.NewClient(fmt.Sprintf("http://localhost:%d", port))
     if cerr != nil {
         fmt.Printf("NewClient failed: %v\n", cerr)
-        os.Exit(1)
+        return
     }
 
     
