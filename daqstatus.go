@@ -6,18 +6,19 @@ import (
     "xmlrpc"
 )
 
-func main() {
+func runClient(port int) {
     var methodName string
     var pval interface{}
     var perr *xmlrpc.XMLRPCError
     var pfault *xmlrpc.XMLRPCFault
 
-    client, cerr := xmlrpc.NewClient("http://localhost:8080")
+    client, cerr := xmlrpc.NewClient(fmt.Sprintf("http://localhost:%d", port))
     if cerr != nil {
         fmt.Printf("NewClient failed: %v\n", cerr)
         os.Exit(1)
     }
 
+    
     methodName = "rpc_ping"
     pval, pfault, perr = client.RPCCall(methodName)
     if perr != nil {
@@ -37,4 +38,8 @@ func main() {
     } else {
         fmt.Printf("%s returned %v <%T>\n", methodName, pval, pval)
     }
+}
+
+func main() {
+    runClient(8080)
 }
