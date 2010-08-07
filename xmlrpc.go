@@ -609,17 +609,6 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
 `, valStr), nil
 }
 
-// Translate a local data object into an XML string
-func MarshalToString(methodName string, args ... interface{}) (string, *XMLRPCError) {
-    buf := bytes.NewBufferString("")
-    err := Marshal(buf, methodName, args)
-    if err != nil {
-        return "", err
-    }
-
-    return string(buf.Bytes()), nil
-}
-
 func Marshal(w io.Writer, methodName string, args ... interface{}) *XMLRPCError {
     var name string
     var addExtra bool

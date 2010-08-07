@@ -72,6 +72,17 @@ func getTypeString(val interface{}, noSpaces bool) string {
     return fmt.Sprintf("<???>%v(%T)</???>", val, val)
 }
 
+// Translate a local data object into an XML string
+func marshalString(methodName string, args ... interface{}) (string, *XMLRPCError) {
+    buf := bytes.NewBufferString("")
+    err := Marshal(buf, methodName, args)
+    if err != nil {
+        return "", err
+    }
+
+    return string(buf.Bytes()), nil
+}
+
 func parseAndCheck(t *testing.T, methodName string, expVal interface{},
     xmlStr string) {
     name, val, err, fault := UnmarshalString(xmlStr)
@@ -164,7 +175,7 @@ func TestMakeRequestBool(t *testing.T) {
     expVal := true
     methodName := "foo"
 
-    xmlStr, err := MarshalToString(methodName, expVal)
+    xmlStr, err := marshalString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -179,7 +190,7 @@ func TestMakeRequestDouble(t *testing.T) {
     expVal := 123.123
     methodName := "foo"
 
-    xmlStr, err := MarshalToString(methodName, expVal)
+    xmlStr, err := marshalString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -194,7 +205,7 @@ func TestMakeRequestInt(t *testing.T) {
     expVal := 123456
     methodName := "foo"
 
-    xmlStr, err := MarshalToString(methodName, expVal)
+    xmlStr, err := marshalString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -211,7 +222,7 @@ func TestMakeRequestMultiParam(t *testing.T) {
     expVal3 := 9876
     methodName := "foo"
 
-    xmlStr, err := MarshalToString(methodName, expVal1, expVal2, expVal3)
+    xmlStr, err := marshalString(methodName, expVal1, expVal2, expVal3)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -226,7 +237,7 @@ func TestMakeRequestNil(t *testing.T) {
     var expVal interface{} = nil
     methodName := "foo"
 
-    xmlStr, err := MarshalToString(methodName, expVal)
+    xmlStr, err := marshalString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
@@ -240,7 +251,7 @@ func TestMakeRequestNil(t *testing.T) {
 func TestMakeRequestNoData(t *testing.T) {
     methodName := "foo"
 
-    xmlStr, err := MarshalToString(methodName)
+    xmlStr, err := marshalString(methodName)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
