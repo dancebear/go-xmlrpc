@@ -715,7 +715,8 @@ func NewClient(host string, port int) (c *Client, err *XMLRPCError) {
 
 func (client *Client) RPCCall(methodName string,
     args ... interface{}) (interface{}, *XMLRPCFault, *XMLRPCError) {
-    body, berr := MarshalToString(methodName, args)
+    buf := bytes.NewBufferString("")
+    berr := Marshal(buf, methodName, args)
     if berr != nil {
         return nil, nil, berr
     }
@@ -726,12 +727,12 @@ func (client *Client) RPCCall(methodName string,
     req.ProtoMajor = 1
     req.ProtoMinor = 1
     req.Close = false
-    req.Body = nopCloser{strings.NewReader(body)}
+    req.Body = nopCloser{buf}
     req.Header = map[string]string{
         "Content-Type": "text/xml",
     }
     req.RawURL = "/RPC2"
-    req.ContentLength = int64(len(body))
+    req.ContentLength = int64(buf.Len())
 
     if client.conn == nil {
         var cerr *XMLRPCError
