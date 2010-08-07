@@ -73,7 +73,7 @@ func getTypeString(val interface{}, noSpaces bool) string {
 }
 
 // Translate a local data object into an XML string
-func marshalString(methodName string, args ... interface{}) (string, *XMLRPCError) {
+func marshalString(methodName string, args ... interface{}) (string, *Error) {
     buf := bytes.NewBufferString("")
     err := Marshal(buf, methodName, args)
     if err != nil {

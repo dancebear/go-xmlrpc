@@ -19,26 +19,26 @@ func isSpace(c byte) bool {
         return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
 
-// An XMLRPCError represents an internal failure in parsing or communication
-type XMLRPCError struct {
+// An Error represents an internal failure in parsing or communication
+type Error struct {
     Msg string
 }
 
-func (err *XMLRPCError) String() string {
+func (err *Error) String() string {
     if err == nil {
         return "NilError"
     }
     return err.Msg
 }
 
-// An XMLRPCFault represents an error or exception in the procedure call
+// A Fault represents an error or exception in the procedure call
 // being run on the remote machine
-type XMLRPCFault struct {
+type Fault struct {
     Code int
     Msg string
 }
 
-func (f *XMLRPCFault) String() string {
+func (f *Fault) String() string {
     if f == nil {
         return "NilFault"
     }
@@ -134,7 +134,7 @@ func getNextStructState(state structState) (structState, string, bool) {
     return state, stateTag, isEnd
 }
 
-func parseStruct(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
+func parseStruct(p *xml.Parser) (interface{}, *Error, bool) {
     state, stateTag, wantEnd := getNextStructState(stInitial)
 
     key := ""
@@ -149,7 +149,7 @@ func parseStruct(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
         }
 
         if err != nil {
-            return nil, &XMLRPCError{Msg:err.String()}, false
+            return nil, &Error{Msg:err.String()}, false
         }
 
         const debug = false
@@ -172,7 +172,7 @@ func parseStruct(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
             } else if wantEnd || v.Name.Local != stateTag {
                 err := fmt.Sprintf("Expected struct tag <%s>, not <%s>",
                     stateTag, v.Name.Local)
-                return nil, &XMLRPCError{Msg:err}, false
+                return nil, &Error{Msg:err}, false
             }
 
             if state == stValue {
@@ -198,7 +198,7 @@ func parseStruct(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
             } else if ! wantEnd || v.Name.Local != stateTag {
                 err := fmt.Sprintf("Expected struct tag </%s>, not </%s>",
                     stateTag, v.Name.Local)
-                return nil, &XMLRPCError{Msg:err}, false
+                return nil, &Error{Msg:err}, false
             }
 
             if state == stEndStruct {
@@ -220,7 +220,7 @@ func parseStruct(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
                 }
 
                 if ! ignore {
-                    err := &XMLRPCError{Msg:fmt.Sprintf("Found" +
+                    err := &Error{Msg:fmt.Sprintf("Found" +
                             " non-whitespace chars \"%s\" inside <struct>",
                             string([]byte(v)))}
                     return nil, err, false
@@ -233,8 +233,8 @@ func parseStruct(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
 }
 
 func getValue(p *xml.Parser, typeName string, b []byte) (interface{},
-    *XMLRPCError, bool) {
-    var unimplemented = &XMLRPCError{Msg:"Unimplemented"}
+    *Error, bool) {
+    var unimplemented = &Error{Msg:"Unimplemented"}
 
     valStr := string(b)
     if typeName == "array" {
@@ -248,21 +248,21 @@ func getValue(p *xml.Parser, typeName string, b []byte) (interface{},
             return false, nil, false
         } else {
             msg := fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
-            return nil, &XMLRPCError{Msg:msg}, false
+            return nil, &Error{Msg:msg}, false
         }
     } else if typeName == "dateTime.iso8601" {
         return nil, unimplemented, false
     } else if typeName == "double" {
         f, err := strconv.Atof(valStr)
         if err != nil {
-            return f, &XMLRPCError{Msg:err.String()}, false
+            return f, &Error{Msg:err.String()}, false
         }
 
         return f, nil, false
     } else if typeName == "int" || typeName == "i4" {
         i, err := strconv.Atoi(valStr)
         if err != nil {
-            return i, &XMLRPCError{Msg:err.String()}, false
+            return i, &Error{Msg:err.String()}, false
         }
 
         return i, nil, false
@@ -272,11 +272,11 @@ func getValue(p *xml.Parser, typeName string, b []byte) (interface{},
         return parseStruct(p)
     }
 
-    return nil, &XMLRPCError{Msg:fmt.Sprintf("Unknown type <%s> for \"%s\"",
+    return nil, &Error{Msg:fmt.Sprintf("Unknown type <%s> for \"%s\"",
             typeName, valStr)}, false
 }
 
-func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
+func unmarshalValue(p *xml.Parser) (interface{}, *Error, bool) {
     var typeName string
     var rtnVal interface{}
 
@@ -289,7 +289,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
         }
 
         if err != nil {
-            return rtnVal, &XMLRPCError{Msg:err.String()}, noEndValTag
+            return rtnVal, &Error{Msg:err.String()}, noEndValTag
         }
 
         const debug = false
@@ -308,7 +308,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
         switch v := tok.(type) {
         case xml.StartElement:
             if typeName != "" {
-                err := &XMLRPCError{Msg:fmt.Sprintf("Found multiple types" +
+                err := &Error{Msg:fmt.Sprintf("Found multiple types" +
                         " (%s and %s) inside <value>", typeName, v.Name.Local)}
                 return nil, err, noEndValTag
             }
@@ -318,7 +318,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
             if typeName == "" && v.Name.Local == "value" {
                 return "", nil, true
             } else if typeName != v.Name.Local {
-                err := &XMLRPCError{Msg:fmt.Sprintf("Found unexpected </%s>" +
+                err := &Error{Msg:fmt.Sprintf("Found unexpected </%s>" +
                         " (wanted </%s>)", v.Name.Local, typeName)}
                 return nil, err, noEndValTag
             }
@@ -329,7 +329,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
             return rtnVal, nil, noEndValTag
         case xml.CharData:
             if typeName != "" && rtnVal == nil {
-                var valErr *XMLRPCError
+                var valErr *Error
                 var sawEndTypeTag bool
                 rtnVal, valErr, sawEndTypeTag = getValue(p, typeName, v)
                 if valErr != nil {
@@ -346,7 +346,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
                             return string([]byte(v)), nil, noEndValTag
                         }
 
-                        err := &XMLRPCError{Msg:fmt.Sprintf("Found" +
+                        err := &Error{Msg:fmt.Sprintf("Found" +
                                 " non-whitespace chars \"%s\" inside <value>",
                                 string([]byte(v)))}
                         return nil, err, noEndValTag
@@ -354,18 +354,18 @@ func unmarshalValue(p *xml.Parser) (interface{}, *XMLRPCError, bool) {
                 }
             }
         default:
-            err := &XMLRPCError{Msg:fmt.Sprintf("Not handling <value> %v" +
+            err := &Error{Msg:fmt.Sprintf("Not handling <value> %v" +
                     " (type %T)", v, v)}
             return nil, err, noEndValTag
         }
     }
 
     if typeName == "" {
-        return rtnVal, &XMLRPCError{Msg:"No type found inside <value>"},
+        return rtnVal, &Error{Msg:"No type found inside <value>"},
         noEndValTag
     }
 
-    return rtnVal, &XMLRPCError{Msg:fmt.Sprintf("Closing tag not found for" +
+    return rtnVal, &Error{Msg:fmt.Sprintf("Closing tag not found for" +
         " <%s>", typeName)}, noEndValTag
 }
 
@@ -385,7 +385,7 @@ func extractParams(v *vector.Vector) interface{} {
 }
 
 // Translate an XML string into a local data object
-func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
+func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
     p := xml.NewParser(r)
 
     state := psMethod
@@ -397,7 +397,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
     params := new(vector.Vector)
 
     isFault := false
-    var faultVal *XMLRPCFault
+    var faultVal *Fault
 
     for {
         tok, err := p.Token()
@@ -407,7 +407,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
 
         if err != nil {
             return methodName, extractParams(params),
-            &XMLRPCError{Msg:err.String()}, faultVal
+            &Error{Msg:err.String()}, faultVal
         }
 
         const debug = false
@@ -435,7 +435,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                     isResp = false
                     stateTag, wantEnd = getStateVals(state, isResp)
                 } else {
-                    err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected initial" +
+                    err := &Error{Msg:fmt.Sprintf("Unexpected initial" +
                             " tag <%s>", v.Name.Local)}
                     return methodName, extractParams(params), err, faultVal
                 }
@@ -445,7 +445,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                     stateTag, wantEnd = getStateVals(state, isResp)
                 } else {
                     var uVal interface{}
-                    var uErr *XMLRPCError
+                    var uErr *Error
                     var sawEndValTag bool
                     uVal, uErr, sawEndValTag = unmarshalValue(p)
                     if uErr != nil {
@@ -453,29 +453,29 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                     }
                     if isFault {
                         if uVal == nil {
-                            err := &XMLRPCError{Msg:"No fault value returned"}
+                            err := &Error{Msg:"No fault value returned"}
                             return methodName, extractParams(params), err, nil
                         }
 
                         if fmap, ok := uVal.(map[string]interface{}); ! ok {
                             err := fmt.Sprintf("Bad type %T for fault", uVal)
                             return methodName, extractParams(params),
-                            &XMLRPCError{Msg:err},
+                            &Error{Msg:err},
                             nil
                         } else {
                             if code, ok := fmap["faultCode"].(int); ! ok {
                                 err := fmt.Sprintf("Fault code should be an" +
                                     " int, not %T", code)
                                 return methodName, extractParams(params),
-                                &XMLRPCError{Msg:err}, nil
+                                &Error{Msg:err}, nil
                             } else if msg, ok := fmap["faultString"].(string);
                             ! ok {
                                 err := fmt.Sprintf("Fault string should be a" +
                                     " string, not %T", msg)
                                 return methodName, extractParams(params),
-                                &XMLRPCError{Msg:err}, nil
+                                &Error{Msg:err}, nil
                             } else {
-                                faultVal = &XMLRPCFault{Code:code, Msg:msg}
+                                faultVal = &Fault{Code:code, Msg:msg}
                             }
                         }
 
@@ -506,7 +506,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                 state = psValue
                 stateTag, wantEnd = getStateVals(state, isResp)
             } else {
-                err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected <%s> token" +
+                err := &Error{Msg:fmt.Sprintf("Unexpected <%s> token" +
                         " for state %s", v.Name.Local, state)}
                 return methodName, extractParams(params), err, faultVal
             }
@@ -536,7 +536,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                 state = psEndMethod
                 stateTag, wantEnd = getStateVals(state, isResp)
             } else {
-                err := &XMLRPCError{Msg:fmt.Sprintf("Unexpected </%s> token" +
+                err := &Error{Msg:fmt.Sprintf("Unexpected </%s> token" +
                         " for state %s", v.Name.Local, state)}
                 return methodName, extractParams(params), err, faultVal
             }
@@ -551,7 +551,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
                             " chars \"%s\" for state %s", string([]byte(v)),
                             state)
                         return methodName, extractParams(params),
-                        &XMLRPCError{Msg:err},
+                        &Error{Msg:err},
                             faultVal
                     }
                 }
@@ -559,7 +559,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
         case xml.ProcInst:
             // ignored
         default:
-            err := &XMLRPCError{Msg:fmt.Sprintf("Not handling %v (type %T)" +
+            err := &Error{Msg:fmt.Sprintf("Not handling %v (type %T)" +
                     " for state %s", v, v, state)}
             return methodName, extractParams(params), err, faultVal
         }
@@ -569,12 +569,12 @@ func Unmarshal(r io.Reader) (string, interface{}, *XMLRPCError, *XMLRPCFault) {
 }
 
 // Translate an XML string into a local data object
-func UnmarshalString(s string) (string, interface{}, *XMLRPCError,
-    *XMLRPCFault) {
+func UnmarshalString(s string) (string, interface{}, *Error,
+    *Fault) {
     return Unmarshal(strings.NewReader(s))
 }
 
-func wrapParam(xval interface{}) (string, *XMLRPCError) {
+func wrapParam(xval interface{}) (string, *Error) {
     var valStr string
 
     if xval == nil {
@@ -597,7 +597,7 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
             valStr = fmt.Sprintf("<string>%s</string>", val)
         default:
             err := fmt.Sprintf("Not wrapping type %T (%v)", val, val)
-            return "", &XMLRPCError{Msg:err}
+            return "", &Error{Msg:err}
         }
     }
 
@@ -609,7 +609,7 @@ func wrapParam(xval interface{}) (string, *XMLRPCError) {
 `, valStr), nil
 }
 
-func Marshal(w io.Writer, methodName string, args ... interface{}) *XMLRPCError {
+func Marshal(w io.Writer, methodName string, args ... interface{}) *Error {
     var name string
     var addExtra bool
     if methodName == "" {
@@ -663,9 +663,9 @@ type Client struct {
     url *http.URL
 }
 
-func open(url *http.URL) (net.Conn, *XMLRPCError) {
+func open(url *http.URL) (net.Conn, *Error) {
     if url.Scheme != "http" {
-        return nil, &XMLRPCError{Msg:fmt.Sprintf("Only supporting \"http\"," +
+        return nil, &Error{Msg:fmt.Sprintf("Only supporting \"http\"," +
                 " not \"%s\"", url.Scheme)}
     }
 
@@ -676,23 +676,23 @@ func open(url *http.URL) (net.Conn, *XMLRPCError) {
 
     conn, cerr := net.Dial("tcp", "", addr)
     if cerr != nil {
-        return nil, &XMLRPCError{Msg:cerr.String()}
+        return nil, &Error{Msg:cerr.String()}
     }
 
     return conn, nil
 }
 
-func NewClient(host string, port int) (c *Client, err *XMLRPCError) {
+func NewClient(host string, port int) (c *Client, err *Error) {
     address := fmt.Sprintf("http://%s:%d", host, port)
 
     url, uerr := http.ParseURL(address)
     if uerr != nil {
-        return nil, &XMLRPCError{Msg:err.String()}
+        return nil, &Error{Msg:err.String()}
     }
 
     var client Client
 
-    var cerr *XMLRPCError
+    var cerr *Error
     if client.conn, cerr = open(url); cerr != nil {
         return nil, cerr
    }
@@ -703,7 +703,7 @@ func NewClient(host string, port int) (c *Client, err *XMLRPCError) {
 }
 
 func (client *Client) RPCCall(methodName string,
-    args ... interface{}) (interface{}, *XMLRPCFault, *XMLRPCError) {
+    args ... interface{}) (interface{}, *Fault, *Error) {
     buf := bytes.NewBufferString("")
     berr := Marshal(buf, methodName, args)
     if berr != nil {
@@ -724,7 +724,7 @@ func (client *Client) RPCCall(methodName string,
     req.ContentLength = int64(buf.Len())
 
     if client.conn == nil {
-        var cerr *XMLRPCError
+        var cerr *Error
         if client.conn, cerr = open(client.url); cerr != nil {
             return nil, nil, cerr
         }
@@ -732,18 +732,18 @@ func (client *Client) RPCCall(methodName string,
 
     if werr := req.Write(client.conn); werr != nil {
         client.conn.Close()
-        return nil, nil, &XMLRPCError{Msg:werr.String()}
+        return nil, nil, &Error{Msg:werr.String()}
     }
 
     reader := bufio.NewReader(client.conn)
     resp, rerr := http.ReadResponse(reader, req.Method)
     if rerr != nil {
         client.conn.Close()
-        return nil, nil, &XMLRPCError{Msg:rerr.String()}
+        return nil, nil, &Error{Msg:rerr.String()}
     } else if resp == nil {
         rrerr := fmt.Sprintf("ReadResponse for %s returned nil response\n",
             methodName)
-        return nil, nil, &XMLRPCError{Msg:rrerr}
+        return nil, nil, &Error{Msg:rrerr}
     }
 
     _, pval, perr, pfault := Unmarshal(resp.Body)

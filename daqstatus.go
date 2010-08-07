@@ -8,8 +8,8 @@ import (
 func runClient(port int) {
     var name string
     var reply interface{}
-    var perr *xmlrpc.XMLRPCError
-    var pfault *xmlrpc.XMLRPCFault
+    var perr *xmlrpc.Error
+    var pfault *xmlrpc.Fault
 
     client, cerr := xmlrpc.NewClient("localhost", port)
     if cerr != nil {
