@@ -4,3 +4,4 @@
 - De-hackify parsing code
 - Implement <array>, <base64>, and <dateTime.iso8601> types
 - Need to encode '<' and '&' in strings
+- Implement via the 'rpc' package?
