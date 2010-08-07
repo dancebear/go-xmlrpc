@@ -7,7 +7,6 @@ import (
 
 func runClient(port int) {
     var methodName string
-    var params []interface{}
     var reply interface{}
     var perr *xmlrpc.XMLRPCError
     var pfault *xmlrpc.XMLRPCFault
@@ -22,15 +21,12 @@ func runClient(port int) {
         switch i {
         case 0:
             methodName = "rpc_ping"
-            params = nil
+            reply, pfault, perr = client.RPCCall(methodName)
         case 1:
             methodName = "rpc_runset_events"
-            params = make([]interface{}, 2, 2)
-            params[0] = 123
-            params[1] = 4
+            reply, pfault, perr = client.RPCCall(methodName, 123, 4)
         }
 
-        reply, pfault, perr = client.RPCCall(methodName, params)
         if perr != nil {
             fmt.Printf("%s failed: %v\n", methodName, perr)
         } else if pfault != nil {
