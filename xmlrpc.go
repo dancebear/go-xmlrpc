@@ -693,8 +693,10 @@ func open(url *http.URL) (net.Conn, *XMLRPCError) {
     return conn, nil
 }
 
-func NewClient(urlStr string) (c *Client, err *XMLRPCError) {
-    url, uerr := http.ParseURL(urlStr)
+func NewClient(host string, port int) (c *Client, err *XMLRPCError) {
+    address := fmt.Sprintf("http://%s:%d", host, port)
+
+    url, uerr := http.ParseURL(address)
     if uerr != nil {
         return nil, &XMLRPCError{Msg:err.String()}
     }

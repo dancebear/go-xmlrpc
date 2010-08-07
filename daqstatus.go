@@ -12,7 +12,7 @@ func runClient(port int) {
     var perr *xmlrpc.XMLRPCError
     var pfault *xmlrpc.XMLRPCFault
 
-    client, cerr := xmlrpc.NewClient(fmt.Sprintf("http://localhost:%d", port))
+    client, cerr := xmlrpc.NewClient("localhost", port)
     if cerr != nil {
         fmt.Printf("NewClient failed: %v\n", cerr)
         return
