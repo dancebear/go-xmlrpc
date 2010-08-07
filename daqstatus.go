@@ -17,25 +17,29 @@ func runClient(port int) {
         return
     }
 
-    
-    methodName = "rpc_ping"
-    reply, pfault, perr = client.RPCCall(methodName)
-    if perr != nil {
-        fmt.Printf("%s failed: %v\n", methodName, perr)
-    } else if pfault != nil {
-        fmt.Printf("%s faulted: %v\n", methodName, pfault)
-    } else {
-        fmt.Printf("%s returned %v <%T>\n", methodName, reply, reply)
-    }
-
-    methodName = "rpc_runset_events"
-    reply, pfault, perr = client.RPCCall(methodName, 123, 4)
-    if perr != nil {
-        fmt.Printf("%s failed: %v\n", methodName, perr)
-    } else if pfault != nil {
-        fmt.Printf("%s faulted: %v\n", methodName, pfault)
-    } else {
-        fmt.Printf("%s returned %v <%T>\n", methodName, reply, reply)
+    for i := 0; i < 2; i++ {
+        switch i {
+        case 0:
+            methodName = "rpc_ping"
+            reply, pfault, perr = client.RPCCall(methodName)
+            if perr != nil {
+                fmt.Printf("%s failed: %v\n", methodName, perr)
+            } else if pfault != nil {
+                fmt.Printf("%s faulted: %v\n", methodName, pfault)
+            } else {
+                fmt.Printf("%s returned %v <%T>\n", methodName, reply, reply)
+            }
+        case 1:
+            methodName = "rpc_runset_events"
+            reply, pfault, perr = client.RPCCall(methodName, 123, 4)
+            if perr != nil {
+                fmt.Printf("%s failed: %v\n", methodName, perr)
+            } else if pfault != nil {
+                fmt.Printf("%s faulted: %v\n", methodName, pfault)
+            } else {
+                fmt.Printf("%s returned %v <%T>\n", methodName, reply, reply)
+            }
+        }
     }
 }
 
