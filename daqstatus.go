@@ -7,7 +7,7 @@ import (
 
 func runClient(port int) {
     var methodName string
-    var pval interface{}
+    var reply interface{}
     var perr *xmlrpc.XMLRPCError
     var pfault *xmlrpc.XMLRPCFault
 
@@ -19,23 +19,23 @@ func runClient(port int) {
 
     
     methodName = "rpc_ping"
-    pval, pfault, perr = client.RPCCall(methodName)
+    reply, pfault, perr = client.RPCCall(methodName)
     if perr != nil {
         fmt.Printf("%s failed: %v\n", methodName, perr)
     } else if pfault != nil {
         fmt.Printf("%s faulted: %v\n", methodName, pfault)
     } else {
-        fmt.Printf("%s returned %v <%T>\n", methodName, pval, pval)
+        fmt.Printf("%s returned %v <%T>\n", methodName, reply, reply)
     }
 
     methodName = "rpc_runset_events"
-    pval, pfault, perr = client.RPCCall(methodName, 123, 4)
+    reply, pfault, perr = client.RPCCall(methodName, 123, 4)
     if perr != nil {
         fmt.Printf("%s failed: %v\n", methodName, perr)
     } else if pfault != nil {
         fmt.Printf("%s faulted: %v\n", methodName, pfault)
     } else {
-        fmt.Printf("%s returned %v <%T>\n", methodName, pval, pval)
+        fmt.Printf("%s returned %v <%T>\n", methodName, reply, reply)
     }
 }
 
