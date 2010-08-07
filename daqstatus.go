@@ -2,35 +2,41 @@ package main
 
 import (
     "fmt"
+    "os"
+    "rpc"
     "xmlrpc"
 )
 
 func runClient(port int) {
     var name string
+    var params []interface{}
     var reply interface{}
-    var perr *xmlrpc.Error
-    var pfault *xmlrpc.Fault
+    var cerr os.Error
 
-    client, cerr := xmlrpc.NewClient("localhost", port)
+    var newClient *rpc.Client
+    newClient, cerr = xmlrpc.Dial("localhost", port)
     if cerr != nil {
-        fmt.Printf("NewClient failed: %v\n", cerr)
+        fmt.Printf("Create failed: %v\n", cerr)
         return
     }
 
     for i := 0; i < 2; i++ {
+        fmt.Printf("+++++++++ Case#%d\n", i)
         switch i {
         case 0:
             name = "rpc_ping"
-            reply, pfault, perr = client.RPCCall(name)
+            params = make([]interface{}, 0, 0)
+            cerr = newClient.Call(name, params, &reply)
         case 1:
             name = "rpc_runset_events"
-            reply, pfault, perr = client.RPCCall(name, 123, 4)
+            params = make([]interface{}, 2, 2)
+            params[0] = 123
+            params[1] = 4
+            cerr = newClient.Call(name, params, &reply)
         }
 
-        if perr != nil {
-            fmt.Printf("%s failed: %v\n", name, perr)
-        } else if pfault != nil {
-            fmt.Printf("%s faulted: %v\n", name, pfault)
+        if cerr != nil {
+            fmt.Printf("%s failed: %v\n", name, cerr)
         } else {
             fmt.Printf("%s returned %v <%T>\n", name, reply, reply)
         }

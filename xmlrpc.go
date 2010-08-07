@@ -10,6 +10,7 @@ import (
     "io"
     "net"
     "os"
+    "rpc"
     "strconv"
     "strings"
     "xml"
@@ -609,7 +610,12 @@ func wrapParam(xval interface{}) (string, *Error) {
 `, valStr), nil
 }
 
+// Write a local data object as an XML-RPC request
 func Marshal(w io.Writer, methodName string, args ... interface{}) *Error {
+    return marshalArray(w, methodName, args)
+}
+
+func marshalArray(w io.Writer, methodName string, args []interface{}) *Error {
     var name string
     var addExtra bool
     if methodName == "" {
@@ -649,7 +655,6 @@ func hasPort(s string) bool {
     return strings.LastIndex(s, ":") > strings.LastIndex(s, "]")
 }
 
-
 type nopCloser struct {
     io.Reader
 }
@@ -682,37 +687,55 @@ func open(url *http.URL) (net.Conn, *Error) {
     return conn, nil
 }
 
-func NewClient(host string, port int) (c *Client, err *Error) {
-    address := fmt.Sprintf("http://%s:%d", host, port)
+/* ========================================= */
 
-    url, uerr := http.ParseURL(address)
-    if uerr != nil {
-        return nil, &Error{Msg:err.String()}
-    }
-
-    var client Client
-
-    var cerr *Error
-    if client.conn, cerr = open(url); cerr != nil {
-        return nil, cerr
-   }
-
-    client.url = url
-
-    return &client, nil
+type clientCodec struct {
+    url *http.URL
+    conn *io.ReadWriteCloser
+    resp *http.Response
+    seq uint64
+	ready chan uint64
 }
 
-func (client *Client) RPCCall(methodName string,
-    args ... interface{}) (interface{}, *Fault, *Error) {
+var reqMethod = "POST"
+
+func (cli *clientCodec) WriteRequest(r *rpc.Request, params interface{}) os.Error {
+    var args []interface{}
+    var ok bool
+    if args, ok = params.([]interface{}); !ok {
+        return os.NewError(fmt.Sprintf("Expected []interface{}, not %T",
+            params))
+    }
+
+    if cli.seq != 0 {
+        return os.NewError("Only one XML-RPC call at a time is allowed")
+    }
+    cli.seq = r.Seq
+
+    if cli.conn == nil {
+        conn, err := open(cli.url)
+        if err != nil {
+            return os.NewError(err.String())
+        }
+
+        if ioConn, ok := conn.(io.ReadWriteCloser); !ok {
+            errMsg := fmt.Sprintf("open() returned bad connection type %T",
+                conn)
+            return os.NewError(errMsg)
+        } else {
+            cli.conn = &ioConn
+        }
+    }
+
     buf := bytes.NewBufferString("")
-    berr := Marshal(buf, methodName, args)
-    if berr != nil {
-        return nil, nil, berr
+    if xmlErr := marshalArray(buf, r.ServiceMethod, args);  xmlErr != nil {
+        return os.NewError(fmt.Sprintf("WriteRequest(%v, %v) marshal failed: %s",
+            r, params, xmlErr))
     }
 
     var req http.Request
-    req.URL = client.url
-    req.Method = "POST"
+    req.URL = cli.url
+    req.Method = reqMethod
     req.ProtoMajor = 1
     req.ProtoMinor = 1
     req.Close = false
@@ -723,39 +746,92 @@ func (client *Client) RPCCall(methodName string,
     req.RawURL = "/RPC2"
     req.ContentLength = int64(buf.Len())
 
-    if client.conn == nil {
-        var cerr *Error
-        if client.conn, cerr = open(client.url); cerr != nil {
-            return nil, nil, cerr
-        }
+    if werr := req.Write(*cli.conn); werr != nil {
+        return werr
     }
 
-    if werr := req.Write(client.conn); werr != nil {
-        client.conn.Close()
-        return nil, nil, &Error{Msg:werr.String()}
-    }
+    cli.ready <- r.Seq
 
-    reader := bufio.NewReader(client.conn)
-    resp, rerr := http.ReadResponse(reader, req.Method)
-    if rerr != nil {
-        client.conn.Close()
-        return nil, nil, &Error{Msg:rerr.String()}
-    } else if resp == nil {
-        rrerr := fmt.Sprintf("ReadResponse for %s returned nil response\n",
-            methodName)
-        return nil, nil, &Error{Msg:rrerr}
-    }
-
-    _, pval, perr, pfault := Unmarshal(resp.Body)
-
-    if resp.Close {
-        resp.Body.Close()
-        client.conn = nil
-    }
-
-    return pval, pfault, perr
+    return nil
 }
 
-func (client *Client) Close() {
-    client.conn.Close()
+func (cli *clientCodec) ReadResponseHeader(r *rpc.Response) os.Error {
+    <-cli.ready
+
+    if cli.conn == nil {
+        return os.NewError("Client connection is nil")
+    }
+
+    reader := bufio.NewReader(*cli.conn)
+
+    resp, rerr := http.ReadResponse(reader, reqMethod)
+    if rerr != nil {
+        return rerr
+    } else if resp == nil {
+        return os.NewError("ReadResponse returned nil response")
+    }
+
+    r.Seq = cli.seq
+
+    cli.resp = resp
+    return nil
+}
+
+func (cli *clientCodec) ReadResponseBody(x interface{}) os.Error {
+    _, pval, perr, pfault := Unmarshal(cli.resp.Body)
+
+    cli.seq = 0
+
+    if cli.resp.Close {
+        cli.resp.Body.Close()
+        cli.conn = nil
+    }
+
+    if perr != nil {
+        return os.NewError(perr.String())
+    }
+
+    if pfault != nil {
+        panic(pfault)
+    }
+
+    if replPtr, ok := x.(*interface{}); !ok {
+        return os.NewError(fmt.Sprintf("Reply type is %T, not *interface{}", x))
+    } else {
+        *replPtr = pval
+    }
+
+    return nil
+}
+
+func (cli *clientCodec) Close() os.Error {
+    return cli.conn.Close()
+}
+
+// NewClientCodec returns a new rpc.ClientCodec using XML-RPC on conn.
+func NewClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
+    return &clientCodec{conn: &conn, url: url, ready: make(chan uint64)}
+}
+
+// NewClient returns a new rpc.Client to handle requests to the
+// set of services at the other end of the connection.
+func NewRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
+    return rpc.NewClientWithCodec(NewClientCodec(conn, url))
+}
+
+// Dial connects to an XML-RPC server at the specified network address.
+func Dial(host string, port int) (*rpc.Client, os.Error) {
+    address := fmt.Sprintf("http://%s:%d", host, port)
+
+    conn, err := net.Dial("tcp", "", address[7:len(address)])
+    if err != nil {
+        return nil, err
+    }
+
+    url, uerr := http.ParseURL(address)
+    if uerr != nil {
+        return nil, uerr
+    }
+
+    return NewRPCClient(conn, url), err
 }
