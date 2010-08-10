@@ -2,13 +2,32 @@ package main
 
 import (
     "fmt"
+    "rpc"
     "xmlrpc"
 )
+
+func call(client *rpc.Client, name string, params []interface{}) interface{} {
+    var reply interface{}
+
+    defer func() {
+        if err := recover(); err != nil {
+            fmt.Printf("Caught fault: %v\n", err)
+        }
+    }()
+
+    cerr := client.Call(name, params, &reply)
+    if cerr != nil {
+        fmt.Printf("%s failed: %v\n", name, cerr)
+    } else {
+        fmt.Printf("%s returned %v\n", name, reply, reply)
+    }
+
+    return reply
+}
 
 func runClient(port int) {
     var name string
     var params []interface{}
-    var reply interface{}
 
     client, cerr := xmlrpc.Dial("localhost", port)
     if cerr != nil {
@@ -29,12 +48,7 @@ func runClient(port int) {
             params[1] = 4
         }
 
-        cerr = client.Call(name, params, &reply)
-        if cerr != nil {
-            fmt.Printf("%s failed: %v\n", name, cerr)
-        } else {
-            fmt.Printf("%s returned %v <%T>\n", name, reply, reply)
-        }
+        call(client, name, params)
     }
 }
 
