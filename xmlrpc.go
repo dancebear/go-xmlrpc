@@ -792,7 +792,7 @@ func (cli *clientCodec) ReadResponseBody(x interface{}) os.Error {
     }
 
     if pfault != nil {
-        panic(pfault)
+        return os.NewError(pfault.String())
     }
 
     if replPtr, ok := x.(*interface{}); !ok {
