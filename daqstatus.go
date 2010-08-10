@@ -19,7 +19,7 @@ func call(client *rpc.Client, name string, params []interface{}) interface{} {
     if cerr != nil {
         fmt.Printf("%s failed: %v\n", name, cerr)
     } else {
-        fmt.Printf("%s returned %v\n", name, reply, reply)
+        fmt.Printf("%s returned %v <%T>\n", name, reply, reply)
     }
 
     return reply
@@ -36,7 +36,6 @@ func runClient(port int) {
     }
 
     for i := 0; i < 2; i++ {
-        fmt.Printf("+++++++++ Case#%d\n", i)
         switch i {
         case 0:
             name = "rpc_ping"
