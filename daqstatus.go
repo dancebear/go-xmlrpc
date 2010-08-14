@@ -19,7 +19,7 @@ func call(client *rpc.Client, name string, params []interface{}) interface{} {
     if cerr != nil {
         fmt.Printf("%s failed: %v\n", name, cerr)
     } else {
-        fmt.Printf("%s returned %v <%T>\n", name, reply, reply)
+        fmt.Printf("%s returned %v\n", name, reply)
     }
 
     return reply
@@ -51,6 +51,24 @@ func runClient(port int) {
     }
 }
 
+type ServerObject struct {
+}
+
+func (*ServerObject) rpc_ping() int {
+    return 12345
+}
+
+func (*ServerObject) rpc_runset_events(rsid int, subrunNum int) (int, bool) {
+    return 17, false
+}
+
 func main() {
     runClient(8080)
+
+    fmt.Printf("\n============================\n\n")
+    sobj := new(ServerObject)
+    l, r := xmlrpc.StartServerPlus(8082)
+    r.Register("", sobj)
+    runClient(8082)
+    l.Close()
 }

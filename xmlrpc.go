@@ -10,6 +10,7 @@ import (
     "io"
     "net"
     "os"
+    "reflect"
     "rpc"
     "strconv"
     "strings"
@@ -836,4 +837,148 @@ func Dial(host string, port int) (*rpc.Client, os.Error) {
     }
 
     return NewRPCClient(conn, url), err
+}
+
+/* ----------------------- */
+
+type methodData struct {
+    obj interface{}
+    method reflect.Method
+}
+
+type MyHandler struct {
+    methods map[string]*methodData
+}
+
+func NewHandler() *MyHandler {
+    h := new(MyHandler)
+    h.methods = make(map[string]*methodData)
+    return h
+}
+
+func (h *MyHandler) Register(prefix string, obj interface{}) os.Error {
+    ot := reflect.Typeof(obj)
+
+    for i := 0; i < ot.NumMethod(); i++ {
+        m := ot.Method(i)
+        if m.PkgPath != "" {
+            continue
+        }
+
+        var name string
+        if prefix == "" {
+            name = m.Name
+        } else {
+            name = prefix + "." + m.Name
+        }
+
+        h.methods[name] = &methodData{obj: obj, method: m}
+    }
+
+    return nil
+}
+
+func writeFault(out io.Writer, code int, msg string) {
+    fmt.Fprintf(out, `<?xml version="1.0"?>
+<methodResponse>
+  <fault>
+    <value>
+        <struct>
+          <member>
+            <name>faultCode</name>
+            <value><int>%d</int></value>
+          </member>
+          <member>
+            <name>faultString</name>
+            <value>%s</value>
+          </member>
+        </struct>
+    </value>
+  </fault>
+</methodResponse>`, code, msg)
+}
+
+func (h *MyHandler) handleRequest(req *http.Request, out io.Writer) {
+    methodName, params, err, fault := Unmarshal(req.Body)
+
+    if err != nil {
+        writeFault(out, 1, fmt.Sprintf("Unmarshal error: %v", err))
+        return
+    } else if fault != nil {
+        writeFault(out, fault.Code, fault.Msg)
+        return
+    }
+
+    var args []interface{}
+    var ok bool
+
+    if args, ok = params.([]interface{}); !ok {
+        args := make([]interface{}, 1, 1)
+        args[0] = params
+    }
+
+    var mData *methodData
+
+    if mData, ok = h.methods[methodName]; !ok {
+        writeFault(out, 2, fmt.Sprintf("Unknown method \"%s\"", methodName))
+        return
+    }
+
+    if len(args) + 1 != mData.method.Type.NumIn() {
+        writeFault(out, 3, fmt.Sprintf("Bad number of parameters for method" +
+            " \"%s\", (%d != %d)", methodName, len(args),
+            mData.method.Type.NumIn()))
+        return
+    }
+
+    vals := make([]reflect.Value, len(args) + 1, len(args) + 1)
+
+    vals[0] = reflect.NewValue(mData.obj)
+    for i := 1; i < mData.method.Type.NumIn(); i++ {
+        if mData.method.Type.In(i) != reflect.Typeof(args[i - 1]) {
+            writeFault(out, 4, fmt.Sprintf("Bad %s argument #%d" +
+                " (%v should be %v)", methodName, i - 1,
+                reflect.Typeof(args[i - 1]), mData.method.Type.In(i)))
+            return
+        }
+
+        vals[i] = reflect.NewValue(args[i - 1])
+    }
+
+    rtnVals := mData.method.Func.Call(vals)
+
+    mArray := make([]interface{}, len(rtnVals), len(rtnVals))
+    for i := 0; i < len(rtnVals); i++ {
+        mArray[i] = rtnVals[i].Interface()
+    }
+
+    buf := bytes.NewBufferString("")
+    err = marshalArray(buf, "", mArray)
+    if err != nil {
+        writeFault(out, 5, fmt.Sprintf("Faied to marshal %s: %v",
+            methodName, err))
+        return
+    }
+
+    buf.WriteTo(out)
+}
+
+func (h *MyHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
+    buf := bytes.NewBufferString("")
+
+    h.handleRequest(req, buf)
+
+    conn.Write(buf.Bytes())
+}
+
+func StartServer(port int) (net.Listener, *MyHandler) {
+    l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+    if err != nil {
+        fmt.Printf("Listen failed: %v\n", err)
+        return nil, nil
+    }
+
+    h := NewHandler()
+    go http.Serve(l, h)
+    return l, h
 }
