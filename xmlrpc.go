@@ -450,7 +450,8 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
                     var sawEndValTag bool
                     uVal, uErr, sawEndValTag = unmarshalValue(p)
                     if uErr != nil {
-                        return methodName, extractParams(params), uErr, faultVal
+                        return methodName, extractParams(params), uErr,
+                        faultVal
                     }
                     if isFault {
                         if uVal == nil {
@@ -729,8 +730,8 @@ func (cli *clientCodec) WriteRequest(r *rpc.Request, params interface{}) os.Erro
 
     buf := bytes.NewBufferString("")
     if xmlErr := marshalArray(buf, r.ServiceMethod, args);  xmlErr != nil {
-        return os.NewError(fmt.Sprintf("WriteRequest(%v, %v) marshal failed: %s",
-            r, params, xmlErr))
+        return os.NewError(fmt.Sprintf("WriteRequest(%v, %v) marshal failed:" +
+            " %s", r, params, xmlErr))
     }
 
     var req http.Request
@@ -796,7 +797,8 @@ func (cli *clientCodec) ReadResponseBody(x interface{}) os.Error {
     }
 
     if replPtr, ok := x.(*interface{}); !ok {
-        return os.NewError(fmt.Sprintf("Reply type is %T, not *interface{}", x))
+        return os.NewError(fmt.Sprintf("Reply type is %T, not *interface{}",
+            x))
     } else {
         *replPtr = pval
     }
