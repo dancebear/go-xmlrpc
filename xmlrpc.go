@@ -820,25 +820,31 @@ func NewRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
     return rpc.NewClientWithCodec(NewClientCodec(conn, url))
 }
 
-// Dial connects to an XML-RPC server at the specified network address.
-func Dial(host string, port int) (*rpc.Client, os.Error) {
+func openConnURL(host string, port int) (net.Conn, *http.URL, os.Error) {
     address := fmt.Sprintf("%s:%d", host, port)
 
-    conn, err := net.Dial("tcp", "", address)
-    if err != nil {
-        return nil, err
+    conn, cerr := net.Dial("tcp", "", address)
+    if cerr != nil {
+        return nil, nil, cerr
     }
 
     url, uerr := http.ParseURL("http://" + address)
     if uerr != nil {
-        return nil, uerr
+        return nil, nil, uerr
     }
 
-    return NewRPCClient(conn, url), err
+    return conn, url, nil
 }
 
-/* ----------------------- */
+// Dial connects to an XML-RPC server at the specified network address.
+func Dial(host string, port int) (*rpc.Client, os.Error) {
+    conn, url, cerr := openConnURL(host, port)
+    if cerr != nil {
+        return nil, &Error{Msg:cerr.String()}
+    }
 
+    return NewRPCClient(conn, url), nil
+}
 
 /********** From http/client.go ************/
 
