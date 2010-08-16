@@ -14,7 +14,7 @@ clean_ds:
 	${RM} daqstatus
 
 clean: clean_ds
-package: xmlrpc.go
+package: xmlrpc
 
 TARG=xmlrpc
 
