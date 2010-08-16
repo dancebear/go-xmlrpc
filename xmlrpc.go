@@ -841,6 +841,113 @@ func Dial(host string, port int) (*rpc.Client, os.Error) {
 
 /* ----------------------- */
 
+
+/********** From http/client.go ************/
+
+type RPCClient struct {
+    conn net.Conn
+    url *http.URL
+}
+
+func openClient(url *http.URL) (net.Conn, *Error) {
+    if url.Scheme != "http" {
+        return nil, &Error{Msg:fmt.Sprintf("Only supporting \"http\"," +
+                " not \"%s\"", url.Scheme)}
+    }
+
+    addr := url.Host
+    if !hasPort(addr) {
+        addr += ":http"
+    }
+
+    conn, cerr := net.Dial("tcp", "", addr)
+    if cerr != nil {
+        return nil, &Error{Msg:cerr.String()}
+    }
+
+    return conn, nil
+}
+
+func NewClient(host string, port int) (c *RPCClient, err *Error) {
+    address := fmt.Sprintf("http://%s:%d", host, port)
+
+    url, uerr := http.ParseURL(address)
+    if uerr != nil {
+        return nil, &Error{Msg:err.String()}
+    }
+
+    var client RPCClient
+
+    var cerr *Error
+    if client.conn, cerr = openClient(url); cerr != nil {
+        return nil, cerr
+   }
+
+    client.url = url
+
+    return &client, nil
+}
+
+func (client *RPCClient) RPCCall(methodName string,
+    args ... interface{}) (interface{}, *Fault, *Error) {
+    buf := bytes.NewBufferString("")
+    berr := Marshal(buf, methodName, args)
+    if berr != nil {
+        return nil, nil, berr
+    }
+
+    var req http.Request
+    req.URL = client.url
+    req.Method = "POST"
+    req.ProtoMajor = 1
+    req.ProtoMinor = 1
+    req.Close = false
+    req.Body = nopCloser{buf}
+    req.Header = map[string]string{
+        "Content-Type": "text/xml",
+    }
+    req.RawURL = "/RPC2"
+    req.ContentLength = int64(buf.Len())
+
+    if client.conn == nil {
+        var cerr *Error
+        if client.conn, cerr = open(client.url); cerr != nil {
+            return nil, nil, cerr
+        }
+    }
+
+    if werr := req.Write(client.conn); werr != nil {
+        client.conn.Close()
+        return nil, nil, &Error{Msg:werr.String()}
+    }
+
+    reader := bufio.NewReader(client.conn)
+    resp, rerr := http.ReadResponse(reader, req.Method)
+    if rerr != nil {
+        client.conn.Close()
+        return nil, nil, &Error{Msg:rerr.String()}
+    } else if resp == nil {
+        rrerr := fmt.Sprintf("ReadResponse for %s returned nil response\n",
+            methodName)
+        return nil, nil, &Error{Msg:rrerr}
+    }
+
+    _, pval, perr, pfault := Unmarshal(resp.Body)
+
+    if resp.Close {
+        resp.Body.Close()
+        client.conn = nil
+    }
+
+    return pval, pfault, perr
+}
+
+func (client *RPCClient) Close() {
+    client.conn.Close()
+}
+
+/* ----------------------- */
+
 type methodData struct {
     obj interface{}
     method reflect.Method

@@ -2,6 +2,7 @@ package main
 
 import (
     "fmt"
+    "net"
     "rpc"
     "xmlrpc"
 )
@@ -25,7 +26,7 @@ func call(client *rpc.Client, name string, params []interface{}) interface{} {
     return reply
 }
 
-func runClient(port int) {
+func runOldClient(port int) {
     var name string
     var params []interface{}
 
@@ -51,6 +52,39 @@ func runClient(port int) {
     }
 }
 
+func runNewClient(port int) interface{} {
+    client, cerr := xmlrpc.NewClient("localhost", port)
+    if cerr != nil {
+        fmt.Printf("Create failed: %v\n", cerr)
+        return nil
+    }
+
+    var reply interface{}
+    for i := 0; i < 2; i++ {
+        var name string
+        var fault *xmlrpc.Fault
+        var err *xmlrpc.Error
+        switch i {
+        case 0:
+            name = "rpc_ping"
+            reply, fault, err = client.RPCCall(name)
+        case 1:
+            name = "rpc_runset_events"
+            reply, fault, err = client.RPCCall(name, 123, 4)
+        }
+
+        if err != nil {
+            fmt.Printf("%s failed: %v\n", name, err)
+        } else if fault != nil {
+            fmt.Printf("%s faulted: %v\n", name, fault)
+        } else {
+            fmt.Printf("%s returned %v\n", name, reply)
+        }
+    }
+
+    return reply
+}
+
 type ServerObject struct {
 }
 
@@ -63,12 +97,35 @@ func (*ServerObject) rpc_runset_events(rsid int, subrunNum int) (int, bool) {
 }
 
 func main() {
-    runClient(8080)
+    var sobj *ServerObject
+    var l net.Listener
+    var r *xmlrpc.RPCHandler
+
+    fmt.Printf("\n============================\n")
+    fmt.Printf("--- Old XML client, Python server\n\n")
+    runOldClient(8080)
+
+    fmt.Printf("\n============================\n")
+    fmt.Printf("--- Old XML client, Go server\n\n")
+    sobj = new(ServerObject)
+    l, r = xmlrpc.StartServer(8081)
+    if l != nil && r != nil {
+        r.Register("", sobj)
+        runOldClient(8081)
+        l.Close()
+    }
+
+    fmt.Printf("\n============================\n")
+    fmt.Printf("--- New XML client, Python server\n\n")
+    runNewClient(8080)
 
     fmt.Printf("\n============================\n\n")
-    sobj := new(ServerObject)
-    l, r := xmlrpc.StartServerPlus(8082)
-    r.Register("", sobj)
-    runClient(8082)
-    l.Close()
+    fmt.Printf("--- New XML client, Go server\n")
+    sobj = new(ServerObject)
+    l, r = xmlrpc.StartServer(8082)
+    if l != nil && r != nil {
+        r.Register("", sobj)
+        runNewClient(8082)
+        l.Close()
+    }
 }
