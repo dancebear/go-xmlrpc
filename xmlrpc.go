@@ -691,7 +691,16 @@ func open(url *http.URL) (net.Conn, *Error) {
 
 /* ========================================= */
 
-type xmlrpcCodec struct {
+type rpcCodec interface {
+    ContentType() string
+    RawURL() string
+    SerializeRequest(r *rpc.Request, params interface{}) (io.ReadWriter,
+        int, os.Error)
+    UnserializeResponse(r io.Reader, x interface{}) os.Error
+}
+
+type httpClient struct {
+    codec rpcCodec
     url *http.URL
     conn *io.ReadWriteCloser
     resp *http.Response
@@ -699,14 +708,7 @@ type xmlrpcCodec struct {
 	ready chan uint64
 }
 
-func (cli *xmlrpcCodec) WriteRequest(r *rpc.Request, params interface{}) os.Error {
-    var args []interface{}
-    var ok bool
-    if args, ok = params.([]interface{}); !ok {
-        return os.NewError(fmt.Sprintf("Expected []interface{}, not %T",
-            params))
-    }
-
+func (cli *httpClient) WriteRequest(r *rpc.Request, params interface{}) os.Error {
     if cli.seq != 0 {
         return os.NewError("Only one XML-RPC call at a time is allowed")
     }
@@ -727,10 +729,9 @@ func (cli *xmlrpcCodec) WriteRequest(r *rpc.Request, params interface{}) os.Erro
         }
     }
 
-    buf := bytes.NewBufferString("")
-    if xmlErr := marshalArray(buf, r.ServiceMethod, args);  xmlErr != nil {
-        return os.NewError(fmt.Sprintf("WriteRequest(%v, %v) marshal failed:" +
-            " %s", r, params, xmlErr))
+    rw, len, rerr := cli.codec.SerializeRequest(r, params)
+    if rerr != nil {
+        return rerr
     }
 
     var req http.Request
@@ -739,12 +740,12 @@ func (cli *xmlrpcCodec) WriteRequest(r *rpc.Request, params interface{}) os.Erro
     req.ProtoMajor = 1
     req.ProtoMinor = 1
     req.Close = false
-    req.Body = nopCloser{buf}
+    req.Body = nopCloser{rw}
     req.Header = map[string]string{
-        "Content-Type": "text/xml",
+        "Content-Type": cli.codec.ContentType(),
     }
-    req.RawURL = "/RPC2"
-    req.ContentLength = int64(buf.Len())
+    req.RawURL = cli.codec.RawURL()
+    req.ContentLength = int64(len)
 
     if werr := req.Write(*cli.conn); werr != nil {
         return werr
@@ -755,7 +756,7 @@ func (cli *xmlrpcCodec) WriteRequest(r *rpc.Request, params interface{}) os.Erro
     return nil
 }
 
-func (cli *xmlrpcCodec) ReadResponseHeader(r *rpc.Response) os.Error {
+func (cli *httpClient) ReadResponseHeader(r *rpc.Response) os.Error {
     <-cli.ready
 
     if cli.conn == nil {
@@ -777,9 +778,8 @@ func (cli *xmlrpcCodec) ReadResponseHeader(r *rpc.Response) os.Error {
     return nil
 }
 
-func (cli *xmlrpcCodec) ReadResponseBody(x interface{}) os.Error {
-    _, pval, perr, pfault := Unmarshal(cli.resp.Body)
-
+func (cli *httpClient) ReadResponseBody(x interface{}) os.Error {
+    perr := cli.codec.UnserializeResponse(cli.resp.Body, x)
     cli.seq = 0
 
     if cli.resp.Close {
@@ -787,38 +787,14 @@ func (cli *xmlrpcCodec) ReadResponseBody(x interface{}) os.Error {
         cli.conn = nil
     }
 
-    if perr != nil {
-        return os.NewError(perr.String())
-    }
-
-    if pfault != nil {
-        return os.NewError(pfault.String())
-    }
-
-    if replPtr, ok := x.(*interface{}); !ok {
-        return os.NewError(fmt.Sprintf("Reply type is %T, not *interface{}",
-            x))
-    } else {
-        *replPtr = pval
-    }
-
-    return nil
+    return perr
 }
 
-func (cli *xmlrpcCodec) Close() os.Error {
+func (cli *httpClient) Close() os.Error {
     return cli.conn.Close()
 }
 
-// NewXMLRPCClientCodec returns a new rpc.ClientCodec using XML-RPC on conn.
-func NewXMLRPCClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
-    return &xmlrpcCodec{conn: &conn, url: url, ready: make(chan uint64)}
-}
-
-// NewXMLRPCClient returns a new rpc.Client to handle requests to the
-// set of services at the other end of the connection.
-func NewXMLRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
-    return rpc.NewClientWithCodec(NewXMLRPCClientCodec(conn, url))
-}
+/* ----------------------------------------- */
 
 func openConnURL(host string, port int) (net.Conn, *http.URL, os.Error) {
     address := fmt.Sprintf("%s:%d", host, port)
@@ -837,13 +813,20 @@ func openConnURL(host string, port int) (net.Conn, *http.URL, os.Error) {
 }
 
 // Dial connects to an XML-RPC server at the specified network address.
-func Dial(host string, port int) (*rpc.Client, os.Error) {
+func Dial(host string, port int, xmlClient bool) (*rpc.Client, os.Error) {
     conn, url, cerr := openConnURL(host, port)
     if cerr != nil {
         return nil, &Error{Msg:cerr.String()}
     }
 
-    return NewXMLRPCClient(conn, url), nil
+    var client *rpc.Client
+    if xmlClient {
+        client = NewXMLRPCClient(conn, url)
+    } else {
+        client = NewJSONRPCClient(conn, url)
+    }
+
+    return client, nil
 }
 
 /********** From http/client.go ************/

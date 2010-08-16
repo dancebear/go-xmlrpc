@@ -20,5 +20,7 @@ TARG=xmlrpc
 
 GOFILES=\
 	xmlrpc.go\
+	xmlrpccodec.go\
+	jsonrpccodec.go\
 
 include $(GOROOT)/src/Make.pkg
