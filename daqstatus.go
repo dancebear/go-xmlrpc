@@ -3,7 +3,9 @@ package main
 import (
     "fmt"
     "net"
+    "os"
     "rpc"
+    "rpc/jsonrpc"
     "xmlrpc"
 )
 
@@ -26,7 +28,7 @@ func call(client *rpc.Client, name string, params []interface{}) interface{} {
     return reply
 }
 
-func runOldClient(port int) {
+func runRPCXMLClient(port int) {
     var name string
     var params []interface{}
 
@@ -52,7 +54,7 @@ func runOldClient(port int) {
     }
 }
 
-func runNewClient(port int) interface{} {
+func runMyXMLClient(port int) interface{} {
     client, cerr := xmlrpc.NewClient("localhost", port)
     if cerr != nil {
         fmt.Printf("Create failed: %v\n", cerr)
@@ -85,6 +87,33 @@ func runNewClient(port int) interface{} {
     return reply
 }
 
+func dialJSON(host string, port int) (*rpc.Client, os.Error) {
+    address := fmt.Sprintf("%s:%d", host, port)
+
+    conn, err := net.Dial("tcp", "", address)
+    if err != nil {
+        return nil, err
+    }
+
+    return rpc.NewClientWithCodec(jsonrpc.NewClientCodec(conn)), nil
+}
+
+func runRPCJSONClient(port int) {
+    client, cerr := dialJSON("localhost", port)
+    if cerr != nil {
+        fmt.Printf("Create failed: %v\n", cerr)
+        return
+    }
+
+    var rep int
+    client.Call("RPCFunc.Prettyprint",
+        &Args{[]string{
+            "Zero", "One",
+        },
+        []int{1,0,1,1,0,1,1,1,0,0,0}}, &rep)
+    fmt.Printf("Len: %d\n", rep)
+}
+
 type ServerObject struct {
 }
 
@@ -96,6 +125,40 @@ func (*ServerObject) rpc_runset_events(rsid int, subrunNum int) (int, bool) {
     return 17, false
 }
 
+type RPCFunc uint8 
+
+type Args struct {
+     Resolver []string
+     Nums     []int
+}
+
+func (*RPCFunc) Prettyprint(args *Args, result *int) os.Error {
+    *result = 0
+    for _,k := range args.Nums {
+        fmt.Printf("%d => \"%s\"\n", k, args.Resolver[k])
+        *result++
+    }
+    return nil
+}
+
+func runJSONServer(l net.Listener) {
+    for {
+        conn, _ := l.Accept()
+        rpc.ServeCodec(jsonrpc.NewServerCodec(conn))
+    }
+}
+
+func startJSONServer(port int) net.Listener {
+    rpc.Register(new (RPCFunc))
+    l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Could not open port: %s\n", err)
+        os.Exit(1)
+    }
+    go runJSONServer(l)
+    return l
+}
+
 func main() {
     var sobj *ServerObject
     var l net.Listener
@@ -103,7 +166,7 @@ func main() {
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old XML client, Python server\n\n")
-    runOldClient(8080)
+    runRPCXMLClient(8080)
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old XML client, Go server\n\n")
@@ -111,13 +174,13 @@ func main() {
     l, r = xmlrpc.StartServer(8081)
     if l != nil && r != nil {
         r.Register("", sobj)
-        runOldClient(8081)
+        runRPCXMLClient(8081)
         l.Close()
     }
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- New XML client, Python server\n\n")
-    runNewClient(8080)
+    runMyXMLClient(8080)
 
     fmt.Printf("\n============================\n\n")
     fmt.Printf("--- New XML client, Go server\n")
@@ -125,7 +188,14 @@ func main() {
     l, r = xmlrpc.StartServer(8082)
     if l != nil && r != nil {
         r.Register("", sobj)
-        runNewClient(8082)
+        runMyXMLClient(8082)
         l.Close()
     }
+
+    fmt.Printf("\n============================\n")
+    fmt.Printf("--- Old JSON client, old JSON server\n\n")
+    l = startJSONServer(8083)
+    runRPCJSONClient(8083)
+
+    l.Close()
 }
