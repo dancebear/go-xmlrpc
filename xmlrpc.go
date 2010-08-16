@@ -848,7 +848,7 @@ func Dial(host string, port int) (*rpc.Client, os.Error) {
 
 /********** From http/client.go ************/
 
-type RPCClient struct {
+type XMLRPCClient struct {
     conn net.Conn
     url *http.URL
 }
@@ -872,7 +872,7 @@ func openClient(url *http.URL) (net.Conn, *Error) {
     return conn, nil
 }
 
-func NewClient(host string, port int) (c *RPCClient, err *Error) {
+func NewClient(host string, port int) (c *XMLRPCClient, err *Error) {
     address := fmt.Sprintf("http://%s:%d", host, port)
 
     url, uerr := http.ParseURL(address)
@@ -880,7 +880,7 @@ func NewClient(host string, port int) (c *RPCClient, err *Error) {
         return nil, &Error{Msg:err.String()}
     }
 
-    var client RPCClient
+    var client XMLRPCClient
 
     var cerr *Error
     if client.conn, cerr = openClient(url); cerr != nil {
@@ -892,7 +892,7 @@ func NewClient(host string, port int) (c *RPCClient, err *Error) {
     return &client, nil
 }
 
-func (client *RPCClient) RPCCall(methodName string,
+func (client *XMLRPCClient) RPCCall(methodName string,
     args ... interface{}) (interface{}, *Fault, *Error) {
     buf := bytes.NewBufferString("")
     berr := Marshal(buf, methodName, args)
@@ -946,7 +946,7 @@ func (client *RPCClient) RPCCall(methodName string,
     return pval, pfault, perr
 }
 
-func (client *RPCClient) Close() {
+func (client *XMLRPCClient) Close() {
     client.conn.Close()
 }
 
@@ -957,17 +957,17 @@ type methodData struct {
     method reflect.Method
 }
 
-type RPCHandler struct {
+type XMLRPCHandler struct {
     methods map[string]*methodData
 }
 
-func NewHandler() *RPCHandler {
-    h := new(RPCHandler)
+func NewHandler() *XMLRPCHandler {
+    h := new(XMLRPCHandler)
     h.methods = make(map[string]*methodData)
     return h
 }
 
-func (h *RPCHandler) Register(prefix string, obj interface{}) os.Error {
+func (h *XMLRPCHandler) Register(prefix string, obj interface{}) os.Error {
     ot := reflect.Typeof(obj)
 
     for i := 0; i < ot.NumMethod(); i++ {
@@ -1009,7 +1009,7 @@ func writeFault(out io.Writer, code int, msg string) {
 </methodResponse>`, code, msg)
 }
 
-func (h *RPCHandler) handleRequest(req *http.Request, out io.Writer) {
+func (h *XMLRPCHandler) handleRequest(req *http.Request, out io.Writer) {
     methodName, params, err, fault := Unmarshal(req.Body)
 
     if err != nil {
@@ -1074,7 +1074,7 @@ func (h *RPCHandler) handleRequest(req *http.Request, out io.Writer) {
     buf.WriteTo(out)
 }
 
-func (h *RPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
+func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
     buf := bytes.NewBufferString("")
 
     h.handleRequest(req, buf)
@@ -1082,7 +1082,7 @@ func (h *RPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
     conn.Write(buf.Bytes())
 }
 
-func StartServer(port int) (net.Listener, *RPCHandler) {
+func StartServer(port int) (net.Listener, *XMLRPCHandler) {
     l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
     if err != nil {
         fmt.Printf("Listen failed: %v\n", err)
