@@ -848,11 +848,6 @@ func Dial(host string, port int) (*rpc.Client, os.Error) {
 
 /********** From http/client.go ************/
 
-type XMLRPCClient struct {
-    conn net.Conn
-    url *http.URL
-}
-
 func openClient(url *http.URL) (net.Conn, *Error) {
     if url.Scheme != "http" {
         return nil, &Error{Msg:fmt.Sprintf("Only supporting \"http\"," +
@@ -872,24 +867,9 @@ func openClient(url *http.URL) (net.Conn, *Error) {
     return conn, nil
 }
 
-func NewClient(host string, port int) (c *XMLRPCClient, err *Error) {
-    address := fmt.Sprintf("http://%s:%d", host, port)
-
-    url, uerr := http.ParseURL(address)
-    if uerr != nil {
-        return nil, &Error{Msg:err.String()}
-    }
-
-    var client XMLRPCClient
-
-    var cerr *Error
-    if client.conn, cerr = openClient(url); cerr != nil {
-        return nil, cerr
-   }
-
-    client.url = url
-
-    return &client, nil
+type XMLRPCClient struct {
+    conn net.Conn
+    url *http.URL
 }
 
 func (client *XMLRPCClient) RPCCall(methodName string,
@@ -948,6 +928,26 @@ func (client *XMLRPCClient) RPCCall(methodName string,
 
 func (client *XMLRPCClient) Close() {
     client.conn.Close()
+}
+
+func NewClient(host string, port int) (c *XMLRPCClient, err *Error) {
+    address := fmt.Sprintf("http://%s:%d", host, port)
+
+    url, uerr := http.ParseURL(address)
+    if uerr != nil {
+        return nil, &Error{Msg:err.String()}
+    }
+
+    var client XMLRPCClient
+
+    var cerr *Error
+    if client.conn, cerr = openClient(url); cerr != nil {
+        return nil, cerr
+   }
+
+    client.url = url
+
+    return &client, nil
 }
 
 /* ----------------------- */
