@@ -846,17 +846,17 @@ type methodData struct {
     method reflect.Method
 }
 
-type MyHandler struct {
+type RPCHandler struct {
     methods map[string]*methodData
 }
 
-func NewHandler() *MyHandler {
-    h := new(MyHandler)
+func NewHandler() *RPCHandler {
+    h := new(RPCHandler)
     h.methods = make(map[string]*methodData)
     return h
 }
 
-func (h *MyHandler) Register(prefix string, obj interface{}) os.Error {
+func (h *RPCHandler) Register(prefix string, obj interface{}) os.Error {
     ot := reflect.Typeof(obj)
 
     for i := 0; i < ot.NumMethod(); i++ {
@@ -898,7 +898,7 @@ func writeFault(out io.Writer, code int, msg string) {
 </methodResponse>`, code, msg)
 }
 
-func (h *MyHandler) handleRequest(req *http.Request, out io.Writer) {
+func (h *RPCHandler) handleRequest(req *http.Request, out io.Writer) {
     methodName, params, err, fault := Unmarshal(req.Body)
 
     if err != nil {
@@ -963,7 +963,7 @@ func (h *MyHandler) handleRequest(req *http.Request, out io.Writer) {
     buf.WriteTo(out)
 }
 
-func (h *MyHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
+func (h *RPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
     buf := bytes.NewBufferString("")
 
     h.handleRequest(req, buf)
@@ -971,7 +971,7 @@ func (h *MyHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
     conn.Write(buf.Bytes())
 }
 
-func StartServer(port int) (net.Listener, *MyHandler) {
+func StartServer(port int) (net.Listener, *RPCHandler) {
     l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
     if err != nil {
         fmt.Printf("Listen failed: %v\n", err)
