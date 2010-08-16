@@ -1054,14 +1054,13 @@ func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
     conn.Write(buf.Bytes())
 }
 
-func StartServer(port int) (net.Listener, *XMLRPCHandler) {
+func StartServer(port int, h *XMLRPCHandler) net.Listener {
     l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
     if err != nil {
         fmt.Printf("Listen failed: %v\n", err)
-        return nil, nil
+        return nil
     }
 
-    h := NewHandler()
     go http.Serve(l, h)
-    return l, h
+    return l
 }

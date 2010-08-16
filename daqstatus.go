@@ -99,7 +99,11 @@ func (*ServerObject) rpc_runset_events(rsid int, subrunNum int) (int, bool) {
 func main() {
     var sobj *ServerObject
     var l net.Listener
-    var r *xmlrpc.XMLRPCHandler
+
+    sobj = new(ServerObject)
+
+    handler := xmlrpc.NewHandler()
+    handler.Register("", sobj)
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old XML client, Python server\n\n")
@@ -107,10 +111,8 @@ func main() {
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old XML client, Go server\n\n")
-    sobj = new(ServerObject)
-    l, r = xmlrpc.StartServer(8081)
-    if l != nil && r != nil {
-        r.Register("", sobj)
+    l = xmlrpc.StartServer(8081, handler)
+    if l != nil {
         runRPCClient(8081, true)
         l.Close()
     }
@@ -122,9 +124,8 @@ func main() {
     fmt.Printf("\n============================\n\n")
     fmt.Printf("--- New XML client, Go server\n")
     sobj = new(ServerObject)
-    l, r = xmlrpc.StartServer(8082)
-    if l != nil && r != nil {
-        r.Register("", sobj)
+    l = xmlrpc.StartServer(8082, handler)
+    if l != nil{
         runMyXMLClient(8082)
         l.Close()
     }
@@ -132,6 +133,4 @@ func main() {
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old JSON client, Python server\n\n")
     runRPCClient(8090, false)
-
-    l.Close()
 }
