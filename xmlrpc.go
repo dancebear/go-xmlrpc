@@ -809,15 +809,15 @@ func (cli *xmlrpcCodec) Close() os.Error {
     return cli.conn.Close()
 }
 
-// NewClientCodec returns a new rpc.ClientCodec using XML-RPC on conn.
-func NewClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
+// NewXMLRPCClientCodec returns a new rpc.ClientCodec using XML-RPC on conn.
+func NewXMLRPCClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
     return &xmlrpcCodec{conn: &conn, url: url, ready: make(chan uint64)}
 }
 
-// NewClient returns a new rpc.Client to handle requests to the
+// NewXMLRPCClient returns a new rpc.Client to handle requests to the
 // set of services at the other end of the connection.
-func NewRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
-    return rpc.NewClientWithCodec(NewClientCodec(conn, url))
+func NewXMLRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
+    return rpc.NewClientWithCodec(NewXMLRPCClientCodec(conn, url))
 }
 
 func openConnURL(host string, port int) (net.Conn, *http.URL, os.Error) {
@@ -843,7 +843,7 @@ func Dial(host string, port int) (*rpc.Client, os.Error) {
         return nil, &Error{Msg:cerr.String()}
     }
 
-    return NewRPCClient(conn, url), nil
+    return NewXMLRPCClient(conn, url), nil
 }
 
 /********** From http/client.go ************/
