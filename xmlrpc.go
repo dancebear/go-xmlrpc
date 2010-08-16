@@ -699,8 +699,6 @@ type xmlrpcCodec struct {
 	ready chan uint64
 }
 
-var reqMethod = "POST"
-
 func (cli *xmlrpcCodec) WriteRequest(r *rpc.Request, params interface{}) os.Error {
     var args []interface{}
     var ok bool
@@ -737,7 +735,7 @@ func (cli *xmlrpcCodec) WriteRequest(r *rpc.Request, params interface{}) os.Erro
 
     var req http.Request
     req.URL = cli.url
-    req.Method = reqMethod
+    req.Method = "POST"
     req.ProtoMajor = 1
     req.ProtoMinor = 1
     req.Close = false
@@ -766,7 +764,7 @@ func (cli *xmlrpcCodec) ReadResponseHeader(r *rpc.Response) os.Error {
 
     reader := bufio.NewReader(*cli.conn)
 
-    resp, rerr := http.ReadResponse(reader, reqMethod)
+    resp, rerr := http.ReadResponse(reader, "POST")
     if rerr != nil {
         return rerr
     } else if resp == nil {
