@@ -824,14 +824,14 @@ func NewRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
 
 // Dial connects to an XML-RPC server at the specified network address.
 func Dial(host string, port int) (*rpc.Client, os.Error) {
-    address := fmt.Sprintf("http://%s:%d", host, port)
+    address := fmt.Sprintf("%s:%d", host, port)
 
-    conn, err := net.Dial("tcp", "", address[7:len(address)])
+    conn, err := net.Dial("tcp", "", address)
     if err != nil {
         return nil, err
     }
 
-    url, uerr := http.ParseURL(address)
+    url, uerr := http.ParseURL("http://" + address)
     if uerr != nil {
         return nil, uerr
     }
