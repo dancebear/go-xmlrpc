@@ -691,7 +691,7 @@ func open(url *http.URL) (net.Conn, *Error) {
 
 /* ========================================= */
 
-type clientCodec struct {
+type xmlrpcCodec struct {
     url *http.URL
     conn *io.ReadWriteCloser
     resp *http.Response
@@ -701,7 +701,7 @@ type clientCodec struct {
 
 var reqMethod = "POST"
 
-func (cli *clientCodec) WriteRequest(r *rpc.Request, params interface{}) os.Error {
+func (cli *xmlrpcCodec) WriteRequest(r *rpc.Request, params interface{}) os.Error {
     var args []interface{}
     var ok bool
     if args, ok = params.([]interface{}); !ok {
@@ -757,7 +757,7 @@ func (cli *clientCodec) WriteRequest(r *rpc.Request, params interface{}) os.Erro
     return nil
 }
 
-func (cli *clientCodec) ReadResponseHeader(r *rpc.Response) os.Error {
+func (cli *xmlrpcCodec) ReadResponseHeader(r *rpc.Response) os.Error {
     <-cli.ready
 
     if cli.conn == nil {
@@ -779,7 +779,7 @@ func (cli *clientCodec) ReadResponseHeader(r *rpc.Response) os.Error {
     return nil
 }
 
-func (cli *clientCodec) ReadResponseBody(x interface{}) os.Error {
+func (cli *xmlrpcCodec) ReadResponseBody(x interface{}) os.Error {
     _, pval, perr, pfault := Unmarshal(cli.resp.Body)
 
     cli.seq = 0
@@ -807,13 +807,13 @@ func (cli *clientCodec) ReadResponseBody(x interface{}) os.Error {
     return nil
 }
 
-func (cli *clientCodec) Close() os.Error {
+func (cli *xmlrpcCodec) Close() os.Error {
     return cli.conn.Close()
 }
 
 // NewClientCodec returns a new rpc.ClientCodec using XML-RPC on conn.
 func NewClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
-    return &clientCodec{conn: &conn, url: url, ready: make(chan uint64)}
+    return &xmlrpcCodec{conn: &conn, url: url, ready: make(chan uint64)}
 }
 
 // NewClient returns a new rpc.Client to handle requests to the
