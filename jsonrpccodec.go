@@ -7,6 +7,7 @@ import (
     "io"
     "json"
     "os"
+    "reflect"
     "rpc"
 )
 
@@ -63,7 +64,13 @@ func (cli *jsonrpcCodec) UnserializeResponse(r io.Reader,
             return os.NewError(fmt.Sprintf("%v", pmap["err"]))
         }
 
-        *replPtr = pmap["result"]
+        if val, ok := pmap["result"].([]interface{}); !ok {
+            *replPtr = pmap["result"]
+        } else if len(val) == 1 {
+            *replPtr = val[0]
+        } else {
+            *replPtr = val
+        }
     }
 
     return nil
@@ -79,3 +86,92 @@ func NewJSONRPCClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCod
 func NewJSONRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
     return rpc.NewClientWithCodec(NewJSONRPCClientCodec(conn, url))
 }
+
+func (cli *jsonrpcCodec) HandleError(conn *http.Conn, code int, msg string) {
+    http.Error(conn, msg, http.StatusBadRequest)
+}
+
+func (cli *jsonrpcCodec) UnserializeRequest(r io.Reader,
+    conn *http.Conn) (string, interface{}, os.Error, bool) {
+    buf := bytes.NewBufferString("")
+    buf.ReadFrom(r)
+
+    var pval interface{}
+    perr := json.Unmarshal(buf.Bytes(), &pval)
+    if perr != nil {
+        http.Error(conn, perr.String(), http.StatusBadRequest)
+        return "", nil, nil, false
+    }
+
+    var pmap map[string]interface{}
+    var ok bool
+
+    if pmap, ok = pval.(map[string]interface{}); !ok {
+        msg := fmt.Sprintf("Returned value is %T, not map[string]interface{}",
+            pval)
+        http.Error(conn, msg, http.StatusBadRequest)
+        return "", nil, nil, false
+    }
+
+    var methodName string
+
+    if methodName, ok = pmap["method"].(string); !ok {
+        msg := fmt.Sprintf("Returned method name is %T, string",
+            pmap["method"])
+        http.Error(conn, msg, http.StatusBadRequest)
+        return "", nil, nil, false
+    }
+
+    return methodName, pmap["params"], nil, true
+}
+
+func (cli *jsonrpcCodec) SerializeResponse(mArray []interface{}) ([]byte, os.Error) {
+    jmap := make(map[string]interface{})
+    jmap["result"] = mArray
+    jmap["err"] = nil
+    return json.MarshalForHTML(jmap)
+}
+
+func (cli *jsonrpcCodec) HandleTypeMismatch(origVal interface{}, expType reflect.Type) (interface{}, bool) {
+    // work around brain-damaged json package
+
+    var fval float64
+    var ok bool
+    if fval, ok = origVal.(float64); !ok {
+        return nil, false
+    }
+
+    var cvtVal interface{}
+    switch expType.Kind() {
+    case reflect.Int:
+        cvtVal = int(fval)
+    case reflect.Int8:
+        cvtVal = int8(fval)
+    case reflect.Int16:
+        cvtVal = int16(fval)
+    case reflect.Int32:
+        cvtVal = int32(fval)
+    case reflect.Int64:
+        cvtVal = int64(fval)
+    case reflect.Uint:
+        cvtVal = uint(fval)
+    case reflect.Uint8:
+        cvtVal = uint8(fval)
+    case reflect.Uint16:
+        cvtVal = uint16(fval)
+    case reflect.Uint32:
+        cvtVal = uint32(fval)
+    case reflect.Uint64:
+        cvtVal = uint64(fval)
+    case reflect.Float:
+        cvtVal = float(fval)
+    case reflect.Float32:
+        cvtVal = float32(fval)
+    default:
+        return nil, false
+    }
+
+    return cvtVal, true
+}
+
+func NewJSONRPCCodec() rpcCodec { return new(jsonrpcCodec) }

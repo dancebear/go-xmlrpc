@@ -6,6 +6,7 @@ import (
     "http"
     "io"
     "os"
+    "reflect"
     "rpc"
 )
 
@@ -63,3 +64,55 @@ func NewXMLRPCClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCode
 func NewXMLRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
     return rpc.NewClientWithCodec(NewXMLRPCClientCodec(conn, url))
 }
+
+func (cli *xmlrpcCodec) HandleError(conn *http.Conn, code int, msg string) {
+    fStr := fmt.Sprintf(`<?xml version="1.0"?>
+<methodResponse>
+  <fault>
+    <value>
+        <struct>
+          <member>
+            <name>faultCode</name>
+            <value><int>%d</int></value>
+          </member>
+          <member>
+            <name>faultString</name>
+            <value>%s</value>
+          </member>
+        </struct>
+    </value>
+  </fault>
+</methodResponse>`, code, msg)
+    conn.Write(bytes.NewBufferString(fStr).Bytes())
+    // XXX - figure out how we should really get bytes from a string
+}
+
+func (cli *xmlrpcCodec) UnserializeRequest(r io.Reader,
+    conn *http.Conn) (string, interface{}, os.Error, bool) {
+    methodName, params, err, fault := Unmarshal(r)
+
+    if err != nil {
+        return "", nil, os.NewError(err.String()), true
+    } else if fault != nil {
+        cli.HandleError(conn, fault.Code, fault.Msg)
+        return "", nil, nil, false
+    }
+
+    return methodName, params, nil, true
+}
+
+func (cli *xmlrpcCodec) SerializeResponse(mArray []interface{}) ([]byte, os.Error) {
+    buf := bytes.NewBufferString("")
+    err := marshalArray(buf, "", mArray)
+    if err != nil {
+        return nil, os.NewError(err.String())
+    }
+
+    return buf.Bytes(), nil
+}
+
+func (cli *xmlrpcCodec) HandleTypeMismatch(origVal interface{}, expType reflect.Type) (interface{}, bool) {
+    return nil, false
+}
+
+func NewXMLRPCCodec() rpcCodec { return new(xmlrpcCodec) }

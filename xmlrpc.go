@@ -697,6 +697,12 @@ type rpcCodec interface {
     SerializeRequest(r *rpc.Request, params interface{}) (io.ReadWriter,
         int, os.Error)
     UnserializeResponse(r io.Reader, x interface{}) os.Error
+    HandleError(conn *http.Conn, code int, msg string)
+    UnserializeRequest(r io.Reader, conn *http.Conn) (string, interface{},
+        os.Error, bool)
+    SerializeResponse(mArray []interface{}) ([]byte, os.Error)
+    HandleTypeMismatch(origVal interface{},
+        expType reflect.Type) (interface{}, bool)
 }
 
 type httpClient struct {
@@ -930,11 +936,13 @@ type methodData struct {
 }
 
 type XMLRPCHandler struct {
+    codec rpcCodec
     methods map[string]*methodData
 }
 
-func NewHandler() *XMLRPCHandler {
+func NewHandler(codec rpcCodec) *XMLRPCHandler {
     h := new(XMLRPCHandler)
+    h.codec = codec
     h.methods = make(map[string]*methodData)
     return h
 }
@@ -961,39 +969,18 @@ func (h *XMLRPCHandler) Register(prefix string, obj interface{}) os.Error {
     return nil
 }
 
-func writeFault(out io.Writer, code int, msg string) {
-    fmt.Fprintf(out, `<?xml version="1.0"?>
-<methodResponse>
-  <fault>
-    <value>
-        <struct>
-          <member>
-            <name>faultCode</name>
-            <value><int>%d</int></value>
-          </member>
-          <member>
-            <name>faultString</name>
-            <value>%s</value>
-          </member>
-        </struct>
-    </value>
-  </fault>
-</methodResponse>`, code, msg)
-}
-
-func (h *XMLRPCHandler) handleRequest(req *http.Request, out io.Writer) {
-    methodName, params, err, fault := Unmarshal(req.Body)
+func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
+    methodName, params, err, ok := h.codec.UnserializeRequest(req.Body, conn)
+    if !ok {
+        return
+    }
 
     if err != nil {
-        writeFault(out, 1, fmt.Sprintf("Unmarshal error: %v", err))
-        return
-    } else if fault != nil {
-        writeFault(out, fault.Code, fault.Msg)
+        h.codec.HandleError(conn, 1, fmt.Sprintf("Unmarshal error: %v", err))
         return
     }
 
     var args []interface{}
-    var ok bool
 
     if args, ok = params.([]interface{}); !ok {
         args := make([]interface{}, 1, 1)
@@ -1003,14 +990,15 @@ func (h *XMLRPCHandler) handleRequest(req *http.Request, out io.Writer) {
     var mData *methodData
 
     if mData, ok = h.methods[methodName]; !ok {
-        writeFault(out, 2, fmt.Sprintf("Unknown method \"%s\"", methodName))
+        h.codec.HandleError(conn, 2,
+            fmt.Sprintf("Unknown method \"%s\"", methodName))
         return
     }
 
     if len(args) + 1 != mData.method.Type.NumIn() {
-        writeFault(out, 3, fmt.Sprintf("Bad number of parameters for method" +
-            " \"%s\", (%d != %d)", methodName, len(args),
-            mData.method.Type.NumIn()))
+        h.codec.HandleError(conn, 3,
+            fmt.Sprintf("Bad number of parameters for method \"%s\"," +
+            "(%d != %d)", methodName, len(args), mData.method.Type.NumIn()))
         return
     }
 
@@ -1018,14 +1006,23 @@ func (h *XMLRPCHandler) handleRequest(req *http.Request, out io.Writer) {
 
     vals[0] = reflect.NewValue(mData.obj)
     for i := 1; i < mData.method.Type.NumIn(); i++ {
-        if mData.method.Type.In(i) != reflect.Typeof(args[i - 1]) {
-            writeFault(out, 4, fmt.Sprintf("Bad %s argument #%d" +
-                " (%v should be %v)", methodName, i - 1,
-                reflect.Typeof(args[i - 1]), mData.method.Type.In(i)))
-            return
-        }
+        expType := mData.method.Type.In(i)
+        argType := reflect.Typeof(args[i - 1])
 
-        vals[i] = reflect.NewValue(args[i - 1])
+        tmpVal := reflect.NewValue(args[i - 1])
+        if expType == argType {
+            vals[i] = tmpVal
+        } else {
+            val, ok := h.codec.HandleTypeMismatch(tmpVal.Interface(), expType)
+            if !ok {
+                h.codec.HandleError(conn, 4,
+                    fmt.Sprintf("Bad %s argument #%d (%v should be %v)",
+                    methodName, i - 1, argType, expType))
+                return
+            }
+
+            vals[i] = reflect.NewValue(val)
+        }
     }
 
     rtnVals := mData.method.Func.Call(vals)
@@ -1034,24 +1031,14 @@ func (h *XMLRPCHandler) handleRequest(req *http.Request, out io.Writer) {
     for i := 0; i < len(rtnVals); i++ {
         mArray[i] = rtnVals[i].Interface()
     }
-
-    buf := bytes.NewBufferString("")
-    err = marshalArray(buf, "", mArray)
-    if err != nil {
-        writeFault(out, 5, fmt.Sprintf("Faied to marshal %s: %v",
-            methodName, err))
+    
+    mBytes, merr := h.codec.SerializeResponse(mArray)
+    if merr != nil {
+        h.codec.HandleError(conn, 5, fmt.Sprintf("Marshal error: %v", merr))
         return
     }
 
-    buf.WriteTo(out)
-}
-
-func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
-    buf := bytes.NewBufferString("")
-
-    h.handleRequest(req, buf)
-
-    conn.Write(buf.Bytes())
+    conn.Write(mBytes)
 }
 
 func StartServer(port int, h *XMLRPCHandler) net.Listener {
