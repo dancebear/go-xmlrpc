@@ -931,23 +931,12 @@ func (client *XMLRPCClient) Close() {
 }
 
 func NewClient(host string, port int) (c *XMLRPCClient, err *Error) {
-    address := fmt.Sprintf("http://%s:%d", host, port)
-
-    url, uerr := http.ParseURL(address)
-    if uerr != nil {
-        return nil, &Error{Msg:err.String()}
+    conn, url, cerr := openConnURL(host, port)
+    if cerr != nil {
+        return nil, &Error{Msg:cerr.String()}
     }
 
-    var client XMLRPCClient
-
-    var cerr *Error
-    if client.conn, cerr = openClient(url); cerr != nil {
-        return nil, cerr
-   }
-
-    client.url = url
-
-    return &client, nil
+    return &XMLRPCClient{conn: conn, url: url}, nil
 }
 
 /* ----------------------- */
