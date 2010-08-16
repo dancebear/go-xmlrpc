@@ -691,7 +691,7 @@ func open(url *http.URL) (net.Conn, *Error) {
 
 /* ========================================= */
 
-type rpcCodec interface {
+type RPCCodec interface {
     ContentType() string
     RawURL() string
     SerializeRequest(r *rpc.Request, params interface{}) (io.ReadWriter,
@@ -706,7 +706,7 @@ type rpcCodec interface {
 }
 
 type httpClient struct {
-    codec rpcCodec
+    codec RPCCodec
     url *http.URL
     conn *io.ReadWriteCloser
     resp *http.Response
@@ -802,6 +802,20 @@ func (cli *httpClient) Close() os.Error {
 
 /* ----------------------------------------- */
 
+// NewRPCClientCodec returns a new rpc.ClientCodec using XML-RPC on conn.
+func NewRPCClientCodec(codec RPCCodec, conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
+    return &httpClient{codec: codec, conn: &conn, url: url, ready: make(chan uint64)}
+}
+
+// NewNRPCClient returns a new rpc.Client to handle requests to the
+// set of services at the other end of the connection.
+func NewRPCClient(codec RPCCodec, conn io.ReadWriteCloser,
+    url *http.URL) *rpc.Client {
+    return rpc.NewClientWithCodec(NewRPCClientCodec(codec, conn, url))
+}
+
+/* ----------------------------------------- */
+
 func openConnURL(host string, port int) (net.Conn, *http.URL, os.Error) {
     address := fmt.Sprintf("%s:%d", host, port)
 
@@ -819,20 +833,13 @@ func openConnURL(host string, port int) (net.Conn, *http.URL, os.Error) {
 }
 
 // Dial connects to an XML-RPC server at the specified network address.
-func Dial(host string, port int, xmlClient bool) (*rpc.Client, os.Error) {
+func Dial(host string, port int, codec RPCCodec) (*rpc.Client, os.Error) {
     conn, url, cerr := openConnURL(host, port)
     if cerr != nil {
         return nil, &Error{Msg:cerr.String()}
     }
 
-    var client *rpc.Client
-    if xmlClient {
-        client = NewXMLRPCClient(conn, url)
-    } else {
-        client = NewJSONRPCClient(conn, url)
-    }
-
-    return client, nil
+    return NewRPCClient(codec, conn, url), nil
 }
 
 /********** From http/client.go ************/
@@ -936,11 +943,11 @@ type methodData struct {
 }
 
 type XMLRPCHandler struct {
-    codec rpcCodec
+    codec RPCCodec
     methods map[string]*methodData
 }
 
-func NewHandler(codec rpcCodec) *XMLRPCHandler {
+func NewHandler(codec RPCCodec) *XMLRPCHandler {
     h := new(XMLRPCHandler)
     h.codec = codec
     h.methods = make(map[string]*methodData)

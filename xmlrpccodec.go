@@ -54,17 +54,6 @@ func (cli *xmlrpcCodec) UnserializeResponse(r io.Reader,
     return nil
 }
 
-// NewXMLRPCClientCodec returns a new rpc.ClientCodec using XML-RPC on conn.
-func NewXMLRPCClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
-    return &httpClient{codec: new(xmlrpcCodec), conn: &conn, url: url, ready: make(chan uint64)}
-}
-
-// NewXMLRPCClient returns a new rpc.Client to handle requests to the
-// set of services at the other end of the connection.
-func NewXMLRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
-    return rpc.NewClientWithCodec(NewXMLRPCClientCodec(conn, url))
-}
-
 func (cli *xmlrpcCodec) HandleError(conn *http.Conn, code int, msg string) {
     fStr := fmt.Sprintf(`<?xml version="1.0"?>
 <methodResponse>
@@ -115,4 +104,4 @@ func (cli *xmlrpcCodec) HandleTypeMismatch(origVal interface{}, expType reflect.
     return nil, false
 }
 
-func NewXMLRPCCodec() rpcCodec { return new(xmlrpcCodec) }
+func NewXMLRPCCodec() RPCCodec { return new(xmlrpcCodec) }

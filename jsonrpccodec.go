@@ -76,17 +76,6 @@ func (cli *jsonrpcCodec) UnserializeResponse(r io.Reader,
     return nil
 }
 
-// NewJSONRPCClientCodec returns a new rpc.ClientCodec using XML-RPC on conn.
-func NewJSONRPCClientCodec(conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
-    return &httpClient{codec: new(jsonrpcCodec), conn: &conn, url: url, ready: make(chan uint64)}
-}
-
-// NewJSONRPCClient returns a new rpc.Client to handle requests to the
-// set of services at the other end of the connection.
-func NewJSONRPCClient(conn io.ReadWriteCloser, url *http.URL) *rpc.Client {
-    return rpc.NewClientWithCodec(NewJSONRPCClientCodec(conn, url))
-}
-
 func (cli *jsonrpcCodec) HandleError(conn *http.Conn, code int, msg string) {
     http.Error(conn, msg, http.StatusBadRequest)
 }
@@ -174,4 +163,4 @@ func (cli *jsonrpcCodec) HandleTypeMismatch(origVal interface{}, expType reflect
     return cvtVal, true
 }
 
-func NewJSONRPCCodec() rpcCodec { return new(jsonrpcCodec) }
+func NewJSONRPCCodec() RPCCodec { return new(jsonrpcCodec) }

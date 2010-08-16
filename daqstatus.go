@@ -30,7 +30,14 @@ func runRPCClient(port int, useXML bool) {
     var name string
     var params []interface{}
 
-    client, cerr := xmlrpc.Dial("localhost", port, useXML)
+    var codec xmlrpc.RPCCodec
+    if useXML {
+        codec = xmlrpc.NewXMLRPCCodec()
+    } else {
+        codec = xmlrpc.NewJSONRPCCodec()
+    }
+
+    client, cerr := xmlrpc.Dial("localhost", port, codec)
     if cerr != nil {
         fmt.Printf("Create failed: %v\n", cerr)
         return
