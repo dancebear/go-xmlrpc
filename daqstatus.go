@@ -106,7 +106,7 @@ func (*ServerObject) rpc_runset_events(rsid int, subrunNum int) (int, bool) {
 func main() {
     var l net.Listener
 
-    sobj := new(ServerObject)
+    sobj := &ServerObject{}
 
     xhand := xmlrpc.NewHandler(xmlrpc.NewXMLRPCCodec())
     xhand.Register("", sobj)
@@ -129,7 +129,6 @@ func main() {
 
     fmt.Printf("\n============================\n\n")
     fmt.Printf("--- New XML client, Go server\n")
-    sobj = new(ServerObject)
     l = xmlrpc.StartServer(8082, xhand)
     if l != nil{
         runMyXMLClient(8082)

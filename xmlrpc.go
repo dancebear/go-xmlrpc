@@ -396,7 +396,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
     wantEnd := false
     methodName := ""
 
-    params := new(vector.Vector)
+    params := &vector.Vector{}
 
     isFault := false
     var faultVal *Fault
@@ -948,10 +948,7 @@ type XMLRPCHandler struct {
 }
 
 func NewHandler(codec RPCCodec) *XMLRPCHandler {
-    h := new(XMLRPCHandler)
-    h.codec = codec
-    h.methods = make(map[string]*methodData)
-    return h
+    return &XMLRPCHandler{codec: codec, methods: make(map[string]*methodData)}
 }
 
 func (h *XMLRPCHandler) Register(prefix string, obj interface{}) os.Error {
