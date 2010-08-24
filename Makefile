@@ -20,6 +20,8 @@ TARG=xmlrpc
 
 GOFILES=\
 	xmlrpc.go\
+	marshal.go\
+	unmarshal.go\
 	xmlrpccodec.go\
 	jsonrpccodec.go\
 
