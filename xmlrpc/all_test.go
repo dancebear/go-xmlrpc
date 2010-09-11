@@ -4,6 +4,7 @@ import (
     "bytes"
     "fmt"
     "reflect"
+    "rpc2"
     "testing"
 )
 
@@ -73,7 +74,7 @@ func getTypeString(val interface{}, noSpaces bool) string {
 }
 
 // Translate a local data object into an XML string
-func marshalString(methodName string, args ... interface{}) (string, *Error) {
+func marshalString(methodName string, args ... interface{}) (string, *rpc2.Error) {
     buf := bytes.NewBufferString("")
     err := Marshal(buf, methodName, args)
     if err != nil {

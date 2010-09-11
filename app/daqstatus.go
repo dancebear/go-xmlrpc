@@ -4,7 +4,9 @@ import (
     "fmt"
     "net"
     "rpc"
-    "xmlrpc"
+    "rpc2"
+    "rpc2/xmlrpc"
+    "rpc2/jsonrpc"
 )
 
 func call(client *rpc.Client, name string, params []interface{}) interface{} {
@@ -30,14 +32,14 @@ func runRPCClient(port int, useXML bool) {
     var name string
     var params []interface{}
 
-    var codec xmlrpc.RPCCodec
+    var codec rpc2.RPCCodec
     if useXML {
         codec = xmlrpc.NewXMLRPCCodec()
     } else {
-        codec = xmlrpc.NewJSONRPCCodec()
+        codec = jsonrpc.NewJSONRPCCodec()
     }
 
-    client, cerr := xmlrpc.Dial("localhost", port, codec)
+    client, cerr := rpc2.Dial("localhost", port, codec)
     if cerr != nil {
         fmt.Printf("Create failed: %v\n", cerr)
         return
@@ -69,8 +71,8 @@ func runMyXMLClient(port int) interface{} {
     var reply interface{}
     for i := 0; i < 2; i++ {
         var name string
-        var fault *xmlrpc.Fault
-        var err *xmlrpc.Error
+        var fault *rpc2.Fault
+        var err *rpc2.Error
         switch i {
         case 0:
             name = "rpc_ping"
@@ -135,7 +137,7 @@ func main() {
         l.Close()
     }
 
-    jhand := xmlrpc.NewHandler(xmlrpc.NewJSONRPCCodec())
+    jhand := xmlrpc.NewHandler(jsonrpc.NewJSONRPCCodec())
     jhand.Register("", sobj)
 
     fmt.Printf("\n============================\n")

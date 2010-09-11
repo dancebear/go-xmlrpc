@@ -1,11 +1,12 @@
-package xmlrpc;
+package xmlrpc
 
 import (
     "fmt"
     "io"
+    "rpc2"
 )
 
-func wrapParam(xval interface{}) (string, *Error) {
+func wrapParam(xval interface{}) (string, *rpc2.Error) {
     var valStr string
 
     if xval == nil {
@@ -28,7 +29,7 @@ func wrapParam(xval interface{}) (string, *Error) {
             valStr = fmt.Sprintf("<string>%s</string>", val)
         default:
             err := fmt.Sprintf("Not wrapping type %T (%v)", val, val)
-            return "", &Error{Msg:err}
+            return "", &rpc2.Error{Msg:err}
         }
     }
 
@@ -41,11 +42,11 @@ func wrapParam(xval interface{}) (string, *Error) {
 }
 
 // Write a local data object as an XML-RPC request
-func Marshal(w io.Writer, methodName string, args ... interface{}) *Error {
+func Marshal(w io.Writer, methodName string, args ... interface{}) *rpc2.Error {
     return marshalArray(w, methodName, args)
 }
 
-func marshalArray(w io.Writer, methodName string, args []interface{}) *Error {
+func marshalArray(w io.Writer, methodName string, args []interface{}) *rpc2.Error {
     var name string
     var addExtra bool
     if methodName == "" {

@@ -8,6 +8,7 @@ import (
     "os"
     "reflect"
     "rpc"
+    "rpc2"
 )
 
 type xmlrpcCodec int
@@ -104,4 +105,4 @@ func (cli *xmlrpcCodec) HandleTypeMismatch(origVal interface{}, expType reflect.
     return nil, false
 }
 
-func NewXMLRPCCodec() RPCCodec { return new(xmlrpcCodec) }
+func NewXMLRPCCodec() rpc2.RPCCodec { return new(xmlrpcCodec) }

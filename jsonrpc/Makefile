@@ -4,10 +4,14 @@
 
 include $(GOROOT)/src/Make.inc
 
-TARG=rpc2
+#package: jsonrpc
+
+TARG=rpc2/jsonrpc
 
 GOFILES=\
-	rpc2.go\
+	jsonrpccodec.go\
 
 include $(GOROOT)/src/Make.pkg
 
+GC+=-I../_obj
+LD+=-L../_obj -lrpc2

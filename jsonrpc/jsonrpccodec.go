@@ -1,4 +1,4 @@
-package xmlrpc
+package jsonrpc
 
 import (
     "bytes"
@@ -9,6 +9,7 @@ import (
     "os"
     "reflect"
     "rpc"
+    "rpc2"
 )
 
 type jsonrpcCodec int
@@ -163,4 +164,4 @@ func (cli *jsonrpcCodec) HandleTypeMismatch(origVal interface{}, expType reflect
     return cvtVal, true
 }
 
-func NewJSONRPCCodec() RPCCodec { return new(jsonrpcCodec) }
+func NewJSONRPCCodec() rpc2.RPCCodec { return new(jsonrpcCodec) }

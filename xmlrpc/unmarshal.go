@@ -1,9 +1,10 @@
-package xmlrpc;
+package xmlrpc
 
 import (
     "container/vector"
     "fmt"
     "io"
+    "rpc2"
     "strconv"
     "strings"
     "xml"
@@ -11,32 +12,6 @@ import (
 
 func isSpace(c byte) bool {
         return c == ' ' || c == '\t' || c == '\r' || c == '\n'
-}
-
-// An Error represents an internal failure in parsing or communication
-type Error struct {
-    Msg string
-}
-
-func (err *Error) String() string {
-    if err == nil {
-        return "NilError"
-    }
-    return err.Msg
-}
-
-// A Fault represents an error or exception in the procedure call
-// being run on the remote machine
-type Fault struct {
-    Code int
-    Msg string
-}
-
-func (f *Fault) String() string {
-    if f == nil {
-        return "NilFault"
-    }
-    return fmt.Sprintf("%s (code#%d)", f.Msg, f.Code)
 }
 
 type parseState int
@@ -128,7 +103,7 @@ func getNextStructState(state structState) (structState, string, bool) {
     return state, stateTag, isEnd
 }
 
-func parseStruct(p *xml.Parser) (interface{}, *Error, bool) {
+func parseStruct(p *xml.Parser) (interface{}, *rpc2.Error, bool) {
     state, stateTag, wantEnd := getNextStructState(stInitial)
 
     key := ""
@@ -143,7 +118,7 @@ func parseStruct(p *xml.Parser) (interface{}, *Error, bool) {
         }
 
         if err != nil {
-            return nil, &Error{Msg:err.String()}, false
+            return nil, &rpc2.Error{Msg:err.String()}, false
         }
 
         const debug = false
@@ -166,7 +141,7 @@ func parseStruct(p *xml.Parser) (interface{}, *Error, bool) {
             } else if wantEnd || v.Name.Local != stateTag {
                 err := fmt.Sprintf("Expected struct tag <%s>, not <%s>",
                     stateTag, v.Name.Local)
-                return nil, &Error{Msg:err}, false
+                return nil, &rpc2.Error{Msg:err}, false
             }
 
             if state == stValue {
@@ -192,7 +167,7 @@ func parseStruct(p *xml.Parser) (interface{}, *Error, bool) {
             } else if ! wantEnd || v.Name.Local != stateTag {
                 err := fmt.Sprintf("Expected struct tag </%s>, not </%s>",
                     stateTag, v.Name.Local)
-                return nil, &Error{Msg:err}, false
+                return nil, &rpc2.Error{Msg:err}, false
             }
 
             if state == stEndStruct {
@@ -214,7 +189,7 @@ func parseStruct(p *xml.Parser) (interface{}, *Error, bool) {
                 }
 
                 if ! ignore {
-                    err := &Error{Msg:fmt.Sprintf("Found" +
+                    err := &rpc2.Error{Msg:fmt.Sprintf("Found" +
                             " non-whitespace chars \"%s\" inside <struct>",
                             string([]byte(v)))}
                     return nil, err, false
@@ -227,8 +202,8 @@ func parseStruct(p *xml.Parser) (interface{}, *Error, bool) {
 }
 
 func getValue(p *xml.Parser, typeName string, b []byte) (interface{},
-    *Error, bool) {
-    var unimplemented = &Error{Msg:"Unimplemented"}
+    *rpc2.Error, bool) {
+    var unimplemented = &rpc2.Error{Msg:"Unimplemented"}
 
     valStr := string(b)
     if typeName == "array" {
@@ -242,21 +217,21 @@ func getValue(p *xml.Parser, typeName string, b []byte) (interface{},
             return false, nil, false
         } else {
             msg := fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
-            return nil, &Error{Msg:msg}, false
+            return nil, &rpc2.Error{Msg:msg}, false
         }
     } else if typeName == "dateTime.iso8601" {
         return nil, unimplemented, false
     } else if typeName == "double" {
         f, err := strconv.Atof(valStr)
         if err != nil {
-            return f, &Error{Msg:err.String()}, false
+            return f, &rpc2.Error{Msg:err.String()}, false
         }
 
         return f, nil, false
     } else if typeName == "int" || typeName == "i4" {
         i, err := strconv.Atoi(valStr)
         if err != nil {
-            return i, &Error{Msg:err.String()}, false
+            return i, &rpc2.Error{Msg:err.String()}, false
         }
 
         return i, nil, false
@@ -266,11 +241,11 @@ func getValue(p *xml.Parser, typeName string, b []byte) (interface{},
         return parseStruct(p)
     }
 
-    return nil, &Error{Msg:fmt.Sprintf("Unknown type <%s> for \"%s\"",
+    return nil, &rpc2.Error{Msg:fmt.Sprintf("Unknown type <%s> for \"%s\"",
             typeName, valStr)}, false
 }
 
-func unmarshalValue(p *xml.Parser) (interface{}, *Error, bool) {
+func unmarshalValue(p *xml.Parser) (interface{}, *rpc2.Error, bool) {
     var typeName string
     var rtnVal interface{}
 
@@ -283,7 +258,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *Error, bool) {
         }
 
         if err != nil {
-            return rtnVal, &Error{Msg:err.String()}, noEndValTag
+            return rtnVal, &rpc2.Error{Msg:err.String()}, noEndValTag
         }
 
         const debug = false
@@ -302,7 +277,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *Error, bool) {
         switch v := tok.(type) {
         case xml.StartElement:
             if typeName != "" {
-                err := &Error{Msg:fmt.Sprintf("Found multiple types" +
+                err := &rpc2.Error{Msg:fmt.Sprintf("Found multiple types" +
                         " (%s and %s) inside <value>", typeName, v.Name.Local)}
                 return nil, err, noEndValTag
             }
@@ -312,7 +287,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *Error, bool) {
             if typeName == "" && v.Name.Local == "value" {
                 return "", nil, true
             } else if typeName != v.Name.Local {
-                err := &Error{Msg:fmt.Sprintf("Found unexpected </%s>" +
+                err := &rpc2.Error{Msg:fmt.Sprintf("Found unexpected </%s>" +
                         " (wanted </%s>)", v.Name.Local, typeName)}
                 return nil, err, noEndValTag
             }
@@ -323,7 +298,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *Error, bool) {
             return rtnVal, nil, noEndValTag
         case xml.CharData:
             if typeName != "" && rtnVal == nil {
-                var valErr *Error
+                var valErr *rpc2.Error
                 var sawEndTypeTag bool
                 rtnVal, valErr, sawEndTypeTag = getValue(p, typeName, v)
                 if valErr != nil {
@@ -340,7 +315,7 @@ func unmarshalValue(p *xml.Parser) (interface{}, *Error, bool) {
                             return string([]byte(v)), nil, noEndValTag
                         }
 
-                        err := &Error{Msg:fmt.Sprintf("Found" +
+                        err := &rpc2.Error{Msg:fmt.Sprintf("Found" +
                                 " non-whitespace chars \"%s\" inside <value>",
                                 string([]byte(v)))}
                         return nil, err, noEndValTag
@@ -348,18 +323,18 @@ func unmarshalValue(p *xml.Parser) (interface{}, *Error, bool) {
                 }
             }
         default:
-            err := &Error{Msg:fmt.Sprintf("Not handling <value> %v" +
+            err := &rpc2.Error{Msg:fmt.Sprintf("Not handling <value> %v" +
                     " (type %T)", v, v)}
             return nil, err, noEndValTag
         }
     }
 
     if typeName == "" {
-        return rtnVal, &Error{Msg:"No type found inside <value>"},
+        return rtnVal, &rpc2.Error{Msg:"No type found inside <value>"},
         noEndValTag
     }
 
-    return rtnVal, &Error{Msg:fmt.Sprintf("Closing tag not found for" +
+    return rtnVal, &rpc2.Error{Msg:fmt.Sprintf("Closing tag not found for" +
         " <%s>", typeName)}, noEndValTag
 }
 
@@ -379,7 +354,7 @@ func extractParams(v *vector.Vector) interface{} {
 }
 
 // Translate an XML string into a local data object
-func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
+func Unmarshal(r io.Reader) (string, interface{}, *rpc2.Error, *rpc2.Fault) {
     p := xml.NewParser(r)
 
     state := psMethod
@@ -391,7 +366,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
     params := &vector.Vector{}
 
     isFault := false
-    var faultVal *Fault
+    var faultVal *rpc2.Fault
 
     for {
         tok, err := p.Token()
@@ -401,7 +376,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
 
         if err != nil {
             return methodName, extractParams(params),
-            &Error{Msg:err.String()}, faultVal
+            &rpc2.Error{Msg:err.String()}, faultVal
         }
 
         const debug = false
@@ -429,7 +404,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
                     isResp = false
                     stateTag, wantEnd = getStateVals(state, isResp)
                 } else {
-                    err := &Error{Msg:fmt.Sprintf("Unexpected initial" +
+                    err := &rpc2.Error{Msg:fmt.Sprintf("Unexpected initial" +
                             " tag <%s>", v.Name.Local)}
                     return methodName, extractParams(params), err, faultVal
                 }
@@ -439,7 +414,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
                     stateTag, wantEnd = getStateVals(state, isResp)
                 } else {
                     var uVal interface{}
-                    var uErr *Error
+                    var uErr *rpc2.Error
                     var sawEndValTag bool
                     uVal, uErr, sawEndValTag = unmarshalValue(p)
                     if uErr != nil {
@@ -448,29 +423,29 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
                     }
                     if isFault {
                         if uVal == nil {
-                            err := &Error{Msg:"No fault value returned"}
+                            err := &rpc2.Error{Msg:"No fault value returned"}
                             return methodName, extractParams(params), err, nil
                         }
 
                         if fmap, ok := uVal.(map[string]interface{}); ! ok {
                             err := fmt.Sprintf("Bad type %T for fault", uVal)
                             return methodName, extractParams(params),
-                            &Error{Msg:err},
+                            &rpc2.Error{Msg:err},
                             nil
                         } else {
                             if code, ok := fmap["faultCode"].(int); ! ok {
                                 err := fmt.Sprintf("Fault code should be an" +
                                     " int, not %T", code)
                                 return methodName, extractParams(params),
-                                &Error{Msg:err}, nil
+                                &rpc2.Error{Msg:err}, nil
                             } else if msg, ok := fmap["faultString"].(string);
                             ! ok {
                                 err := fmt.Sprintf("Fault string should be a" +
                                     " string, not %T", msg)
                                 return methodName, extractParams(params),
-                                &Error{Msg:err}, nil
+                                &rpc2.Error{Msg:err}, nil
                             } else {
-                                faultVal = &Fault{Code:code, Msg:msg}
+                                faultVal = &rpc2.Fault{Code:code, Msg:msg}
                             }
                         }
 
@@ -501,7 +476,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
                 state = psValue
                 stateTag, wantEnd = getStateVals(state, isResp)
             } else {
-                err := &Error{Msg:fmt.Sprintf("Unexpected <%s> token" +
+                err := &rpc2.Error{Msg:fmt.Sprintf("Unexpected <%s> token" +
                         " for state %s", v.Name.Local, state)}
                 return methodName, extractParams(params), err, faultVal
             }
@@ -531,7 +506,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
                 state = psEndMethod
                 stateTag, wantEnd = getStateVals(state, isResp)
             } else {
-                err := &Error{Msg:fmt.Sprintf("Unexpected </%s> token" +
+                err := &rpc2.Error{Msg:fmt.Sprintf("Unexpected </%s> token" +
                         " for state %s", v.Name.Local, state)}
                 return methodName, extractParams(params), err, faultVal
             }
@@ -546,7 +521,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
                             " chars \"%s\" for state %s", string([]byte(v)),
                             state)
                         return methodName, extractParams(params),
-                        &Error{Msg:err},
+                        &rpc2.Error{Msg:err},
                             faultVal
                     }
                 }
@@ -554,7 +529,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
         case xml.ProcInst:
             // ignored
         default:
-            err := &Error{Msg:fmt.Sprintf("Not handling %v (type %T)" +
+            err := &rpc2.Error{Msg:fmt.Sprintf("Not handling %v (type %T)" +
                     " for state %s", v, v, state)}
             return methodName, extractParams(params), err, faultVal
         }
@@ -564,7 +539,7 @@ func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
 }
 
 // Translate an XML string into a local data object
-func UnmarshalString(s string) (string, interface{}, *Error,
-    *Fault) {
+func UnmarshalString(s string) (string, interface{}, *rpc2.Error,
+    *rpc2.Fault) {
     return Unmarshal(strings.NewReader(s))
 }
