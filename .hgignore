@@ -1,0 +1,12 @@
+syntax: glob
+
+.\#*
+*.swp
+
+_obj/
+_test/
+
+*.6
+6.out
+
+daqstatus
