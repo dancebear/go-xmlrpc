@@ -12,6 +12,7 @@ import (
     "reflect"
     "rpc"
     "strings"
+    "url"
 )
 
 /********** From http/client.go ************/
@@ -32,10 +33,10 @@ func (nopCloser) Close() os.Error { return nil }
 
 type Client struct {
     conn net.Conn
-    url *http.URL
+    url *url.URL
 }
 
-func open(url *http.URL) (net.Conn, *Error) {
+func open(url *url.URL) (net.Conn, *Error) {
     if url.Scheme != "http" {
         return nil, &Error{Msg:fmt.Sprintf("Only supporting \"http\"," +
                 " not \"%s\"", url.Scheme)}
@@ -46,7 +47,7 @@ func open(url *http.URL) (net.Conn, *Error) {
         addr += ":http"
     }
 
-    conn, cerr := net.Dial("tcp", "", addr)
+    conn, cerr := net.Dial("tcp", addr)
     if cerr != nil {
         return nil, &Error{Msg:cerr.String()}
     }
@@ -62,8 +63,8 @@ type RPCCodec interface {
     SerializeRequest(r *rpc.Request, params interface{}) (io.ReadWriter,
         int, os.Error)
     UnserializeResponse(r io.Reader, x interface{}) os.Error
-    HandleError(conn *http.Conn, code int, msg string)
-    UnserializeRequest(r io.Reader, conn *http.Conn) (string, interface{},
+    HandleError(conn http.ResponseWriter, code int, msg string)
+    UnserializeRequest(r io.Reader, conn http.ResponseWriter) (string, interface{},
         os.Error, bool)
     SerializeResponse(mArray []interface{}) ([]byte, os.Error)
     HandleTypeMismatch(origVal interface{},
@@ -72,8 +73,9 @@ type RPCCodec interface {
 
 type httpClient struct {
     codec RPCCodec
-    url *http.URL
+    url *url.URL
     conn *io.ReadWriteCloser
+    req *http.Request
     resp *http.Response
     seq uint64
 	ready chan uint64
@@ -112,8 +114,8 @@ func (cli *httpClient) WriteRequest(r *rpc.Request, params interface{}) os.Error
     req.ProtoMinor = 1
     req.Close = false
     req.Body = nopCloser{rw}
-    req.Header = map[string]string{
-        "Content-Type": cli.codec.ContentType(),
+    req.Header = map[string][]string{
+        "Content-Type": {cli.codec.ContentType()},
     }
     req.RawURL = cli.codec.RawURL()
     req.ContentLength = int64(len)
@@ -121,6 +123,8 @@ func (cli *httpClient) WriteRequest(r *rpc.Request, params interface{}) os.Error
     if werr := req.Write(*cli.conn); werr != nil {
         return werr
     }
+
+    cli.req = &req
 
     cli.ready <- r.Seq
 
@@ -136,7 +140,7 @@ func (cli *httpClient) ReadResponseHeader(r *rpc.Response) os.Error {
 
     reader := bufio.NewReader(*cli.conn)
 
-    resp, rerr := http.ReadResponse(reader, "POST")
+    resp, rerr := http.ReadResponse(reader, cli.req)
     if rerr != nil {
         return rerr
     } else if resp == nil {
@@ -151,6 +155,7 @@ func (cli *httpClient) ReadResponseHeader(r *rpc.Response) os.Error {
 
 func (cli *httpClient) ReadResponseBody(x interface{}) os.Error {
     perr := cli.codec.UnserializeResponse(cli.resp.Body, x)
+
     cli.seq = 0
 
     if cli.resp.Close {
@@ -162,34 +167,36 @@ func (cli *httpClient) ReadResponseBody(x interface{}) os.Error {
 }
 
 func (cli *httpClient) Close() os.Error {
-    return cli.conn.Close()
+     fmt.Printf("Not closing %v <%T>\n", cli.conn, cli.conn)
+     //return cli.conn.Close()
+     return nil
 }
 
 /* ----------------------------------------- */
 
 // NewRPCClientCodec returns a new rpc.ClientCodec for the RPCCodec
-func NewRPCClientCodec(codec RPCCodec, conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
+func NewRPCClientCodec(codec RPCCodec, conn io.ReadWriteCloser, url *url.URL) rpc.ClientCodec {
     return &httpClient{codec: codec, conn: &conn, url: url, ready: make(chan uint64)}
 }
 
 // NewNRPCClient returns a new rpc.Client to handle requests to the
 // set of services at the other end of the connection.
 func NewRPCClient(codec RPCCodec, conn io.ReadWriteCloser,
-    url *http.URL) *rpc.Client {
+    url *url.URL) *rpc.Client {
     return rpc.NewClientWithCodec(NewRPCClientCodec(codec, conn, url))
 }
 
 /* ----------------------------------------- */
 
-func openConnURL(host string, port int) (net.Conn, *http.URL, os.Error) {
+func openConnURL(host string, port int) (net.Conn, *url.URL, os.Error) {
     address := fmt.Sprintf("%s:%d", host, port)
 
-    conn, cerr := net.Dial("tcp", "", address)
+    conn, cerr := net.Dial("tcp", address)
     if cerr != nil {
         return nil, nil, cerr
     }
 
-    url, uerr := http.ParseURL("http://" + address)
+    url, uerr := url.Parse("http://" + address)
     if uerr != nil {
         return nil, nil, uerr
     }
@@ -209,7 +216,7 @@ func Dial(host string, port int, codec RPCCodec) (*rpc.Client, os.Error) {
 
 /********** From http/client.go ************/
 
-func openClient(url *http.URL) (net.Conn, *Error) {
+func openClient(url *url.URL) (net.Conn, *Error) {
     if url.Scheme != "http" {
         return nil, &Error{Msg:fmt.Sprintf("Only supporting \"http\"," +
                 " not \"%s\"", url.Scheme)}
@@ -220,7 +227,7 @@ func openClient(url *http.URL) (net.Conn, *Error) {
         addr += ":http"
     }
 
-    conn, cerr := net.Dial("tcp", "", addr)
+    conn, cerr := net.Dial("tcp", addr)
     if cerr != nil {
         return nil, &Error{Msg:cerr.String()}
     }
@@ -230,7 +237,7 @@ func openClient(url *http.URL) (net.Conn, *Error) {
 
 type RPCClient struct {
     conn net.Conn
-    url *http.URL
+    url *url.URL
 }
 
 func (client *RPCClient) RPCCall(methodName string,
@@ -248,8 +255,8 @@ func (client *RPCClient) RPCCall(methodName string,
     req.ProtoMinor = 1
     req.Close = false
     req.Body = nopCloser{buf}
-    req.Header = map[string]string{
-        "Content-Type": "text/xml",
+    req.Header = map[string][]string{
+        "Content-Type": {"text/xml"},
     }
     req.RawURL = "/RPC2"
     req.ContentLength = int64(buf.Len())
@@ -267,7 +274,7 @@ func (client *RPCClient) RPCCall(methodName string,
     }
 
     reader := bufio.NewReader(client.conn)
-    resp, rerr := http.ReadResponse(reader, req.Method)
+    resp, rerr := http.ReadResponse(reader, &req)
     if rerr != nil {
         client.conn.Close()
         return nil, nil, &Error{Msg:rerr.String()}
@@ -317,7 +324,7 @@ func NewHandler(codec RPCCodec) *XMLRPCHandler {
 }
 
 func (h *XMLRPCHandler) Register(prefix string, obj interface{}) os.Error {
-    ot := reflect.Typeof(obj)
+    ot := reflect.TypeOf(obj)
 
     for i := 0; i < ot.NumMethod(); i++ {
         m := ot.Method(i)
@@ -338,7 +345,7 @@ func (h *XMLRPCHandler) Register(prefix string, obj interface{}) os.Error {
     return nil
 }
 
-func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
+func (h *XMLRPCHandler) ServeHTTP(conn http.ResponseWriter, req *http.Request) {
     methodName, params, err, ok := h.codec.UnserializeRequest(req.Body, conn)
     if !ok {
         return
@@ -373,12 +380,12 @@ func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
 
     vals := make([]reflect.Value, len(args) + 1, len(args) + 1)
 
-    vals[0] = reflect.NewValue(mData.obj)
+    vals[0] = reflect.ValueOf(mData.obj)
     for i := 1; i < mData.method.Type.NumIn(); i++ {
         expType := mData.method.Type.In(i)
-        argType := reflect.Typeof(args[i - 1])
+        argType := reflect.TypeOf(args[i - 1])
 
-        tmpVal := reflect.NewValue(args[i - 1])
+        tmpVal := reflect.ValueOf(args[i - 1])
         if expType == argType {
             vals[i] = tmpVal
         } else {
@@ -390,7 +397,7 @@ func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
                 return
             }
 
-            vals[i] = reflect.NewValue(val)
+            vals[i] = reflect.ValueOf(val)
         }
     }
 
@@ -400,7 +407,7 @@ func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
     for i := 0; i < len(rtnVals); i++ {
         mArray[i] = rtnVals[i].Interface()
     }
-    
+
     mBytes, merr := h.codec.SerializeResponse(mArray)
     if merr != nil {
         h.codec.HandleError(conn, 5, fmt.Sprintf("Marshal error: %v", merr))

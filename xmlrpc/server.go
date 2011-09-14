@@ -24,7 +24,7 @@ func NewHandler(codec rpc2.RPCCodec) *XMLRPCHandler {
 }
 
 func (h *XMLRPCHandler) Register(prefix string, obj interface{}) os.Error {
-    ot := reflect.Typeof(obj)
+    ot := reflect.TypeOf(obj)
 
     for i := 0; i < ot.NumMethod(); i++ {
         m := ot.Method(i)
@@ -45,7 +45,7 @@ func (h *XMLRPCHandler) Register(prefix string, obj interface{}) os.Error {
     return nil
 }
 
-func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
+func (h *XMLRPCHandler) ServeHTTP(conn http.ResponseWriter, req *http.Request) {
     methodName, params, err, ok := h.codec.UnserializeRequest(req.Body, conn)
     if !ok {
         return
@@ -80,12 +80,12 @@ func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
 
     vals := make([]reflect.Value, len(args) + 1, len(args) + 1)
 
-    vals[0] = reflect.NewValue(mData.obj)
+    vals[0] = reflect.ValueOf(mData.obj)
     for i := 1; i < mData.method.Type.NumIn(); i++ {
         expType := mData.method.Type.In(i)
-        argType := reflect.Typeof(args[i - 1])
+        argType := reflect.TypeOf(args[i - 1])
 
-        tmpVal := reflect.NewValue(args[i - 1])
+        tmpVal := reflect.ValueOf(args[i - 1])
         if expType == argType {
             vals[i] = tmpVal
         } else {
@@ -97,7 +97,7 @@ func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
                 return
             }
 
-            vals[i] = reflect.NewValue(val)
+            vals[i] = reflect.ValueOf(val)
         }
     }
 
@@ -107,7 +107,7 @@ func (h *XMLRPCHandler) ServeHTTP(conn *http.Conn, req *http.Request) {
     for i := 0; i < len(rtnVals); i++ {
         mArray[i] = rtnVals[i].Interface()
     }
-    
+
     mBytes, merr := h.codec.SerializeResponse(mArray)
     if merr != nil {
         h.codec.HandleError(conn, 5, fmt.Sprintf("Marshal error: %v", merr))

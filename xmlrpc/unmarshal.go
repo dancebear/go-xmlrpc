@@ -222,7 +222,7 @@ func getValue(p *xml.Parser, typeName string, b []byte) (interface{},
     } else if typeName == "dateTime.iso8601" {
         return nil, unimplemented, false
     } else if typeName == "double" {
-        f, err := strconv.Atof(valStr)
+        f, err := strconv.Atof64(valStr)
         if err != nil {
             return f, &rpc2.Error{Msg:err.String()}, false
         }

@@ -55,7 +55,8 @@ func (cli *xmlrpcCodec) UnserializeResponse(r io.Reader,
     return nil
 }
 
-func (cli *xmlrpcCodec) HandleError(conn *http.Conn, code int, msg string) {
+func (cli *xmlrpcCodec) HandleError(conn http.ResponseWriter, code int,
+    msg string) {
     fStr := fmt.Sprintf(`<?xml version="1.0"?>
 <methodResponse>
   <fault>
@@ -78,7 +79,7 @@ func (cli *xmlrpcCodec) HandleError(conn *http.Conn, code int, msg string) {
 }
 
 func (cli *xmlrpcCodec) UnserializeRequest(r io.Reader,
-    conn *http.Conn) (string, interface{}, os.Error, bool) {
+    conn http.ResponseWriter) (string, interface{}, os.Error, bool) {
     methodName, params, err, fault := Unmarshal(r)
 
     if err != nil {

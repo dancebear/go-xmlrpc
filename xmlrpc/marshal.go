@@ -21,7 +21,9 @@ func wrapParam(xval interface{}) (string, *rpc2.Error) {
                 bval = 0
             }
             valStr = fmt.Sprintf("<boolean>%d</boolean>", bval)
-        case float:
+        case float32:
+            valStr = fmt.Sprintf("<double>%f</double>", val)
+        case float64:
             valStr = fmt.Sprintf("<double>%f</double>", val)
         case int:
             valStr = fmt.Sprintf("<int>%d</int>", val)
@@ -42,7 +44,7 @@ func wrapParam(xval interface{}) (string, *rpc2.Error) {
 }
 
 // Write a local data object as an XML-RPC request
-func Marshal(w io.Writer, methodName string, args ... interface{}) *rpc2.Error {
+func Marshal(w io.Writer, methodName string, args []interface{}) *rpc2.Error {
     return marshalArray(w, methodName, args)
 }
 
