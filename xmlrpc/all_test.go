@@ -34,7 +34,17 @@ func getTypeString(val interface{}, noSpaces bool) string {
             bVal = 0
         }
         return fmt.Sprintf("%s<boolean>%d</boolean>%s", pre, bVal, post)
-    case float:
+    case float32:
+        // hack to make float values match
+        fStr := fmt.Sprintf("%f", v)
+        fLen := len(fStr)
+        fSub := fStr[fLen-3:fLen]
+        if fLen > 3 && fSub != "001" {
+            fStr += "001"
+        }
+
+        return fmt.Sprintf("%s<double>%s</double>%s", pre, fStr, post)
+    case float64:
         // hack to make float values match
         fStr := fmt.Sprintf("%f", v)
         fLen := len(fStr)
@@ -63,7 +73,7 @@ func getTypeString(val interface{}, noSpaces bool) string {
         fmt.Printf("XXX array\n")
     }
 
-    valKind := reflect.Typeof(val).Kind()
+    valKind := reflect.TypeOf(val).Kind()
     if valKind == reflect.Array || valKind == reflect.Slice {
         return "<array>foo</array>"
     } else {
@@ -106,7 +116,7 @@ func parseAndCheck(t *testing.T, methodName string, expVal interface{},
             t.Fatalf("Got unexpected value %v <%T>", val, val)
         }
     } else {
-        if reflect.Typeof(val) != reflect.Typeof(expVal) {
+        if reflect.TypeOf(val) != reflect.TypeOf(expVal) {
             t.Fatalf("Returned type %T, not %T", val, expVal)
         }
 

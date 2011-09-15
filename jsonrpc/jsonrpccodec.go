@@ -77,12 +77,13 @@ func (cli *jsonrpcCodec) UnserializeResponse(r io.Reader,
     return nil
 }
 
-func (cli *jsonrpcCodec) HandleError(conn *http.Conn, code int, msg string) {
+func (cli *jsonrpcCodec) HandleError(conn http.ResponseWriter, code int,
+    msg string) {
     http.Error(conn, msg, http.StatusBadRequest)
 }
 
 func (cli *jsonrpcCodec) UnserializeRequest(r io.Reader,
-    conn *http.Conn) (string, interface{}, os.Error, bool) {
+    conn http.ResponseWriter) (string, interface{}, os.Error, bool) {
     buf := bytes.NewBufferString("")
     buf.ReadFrom(r)
 
@@ -153,10 +154,10 @@ func (cli *jsonrpcCodec) HandleTypeMismatch(origVal interface{}, expType reflect
         cvtVal = uint32(fval)
     case reflect.Uint64:
         cvtVal = uint64(fval)
-    case reflect.Float:
-        cvtVal = float(fval)
     case reflect.Float32:
         cvtVal = float32(fval)
+    case reflect.Float64:
+        cvtVal = float64(fval)
     default:
         return nil, false
     }

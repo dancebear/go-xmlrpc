@@ -28,7 +28,7 @@ func call(client *rpc.Client, name string, params []interface{}) interface{} {
     return reply
 }
 
-func runRPCClient(port int, useXML bool) {
+func runRPCClient(port int, useXML bool, export bool) {
     var name string
     var params []interface{}
 
@@ -48,10 +48,18 @@ func runRPCClient(port int, useXML bool) {
     for i := 0; i < 2; i++ {
         switch i {
         case 0:
-            name = "rpc_ping"
+            if export {
+                name = "RPC_ping"
+            } else {
+                name = "rpc_ping"
+            }
             params = make([]interface{}, 0, 0)
         case 1:
-            name = "rpc_runset_events"
+            if export {
+                name = "RPC_runset_events"
+            } else {
+                name = "rpc_runset_events"
+            }
             params = make([]interface{}, 2, 2)
             params[0] = 123
             params[1] = 4
@@ -61,7 +69,7 @@ func runRPCClient(port int, useXML bool) {
     }
 }
 
-func runMyXMLClient(port int) interface{} {
+func runMyXMLClient(port int, export bool) interface{} {
     client, cerr := xmlrpc.NewClient("localhost", port)
     if cerr != nil {
         fmt.Printf("Create failed: %v\n", cerr)
@@ -75,10 +83,18 @@ func runMyXMLClient(port int) interface{} {
         var err *rpc2.Error
         switch i {
         case 0:
-            name = "rpc_ping"
+            if export {
+                name = "RPC_ping"
+            } else {
+                name = "rpc_ping"
+            }
             reply, fault, err = client.RPCCall(name)
         case 1:
-            name = "rpc_runset_events"
+            if export {
+                name = "RPC_runset_events"
+            } else {
+                name = "rpc_runset_events"
+            }
             reply, fault, err = client.RPCCall(name, 123, 4)
         }
 
@@ -97,11 +113,11 @@ func runMyXMLClient(port int) interface{} {
 type ServerObject struct {
 }
 
-func (*ServerObject) rpc_ping() int {
+func (*ServerObject) RPC_ping() int {
     return 12345
 }
 
-func (*ServerObject) rpc_runset_events(rsid int, subrunNum int) (int, bool) {
+func (*ServerObject) RPC_runset_events(rsid int, subrunNum int) (int, bool) {
     return 17, false
 }
 
@@ -115,25 +131,25 @@ func main() {
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old XML client, Python server\n\n")
-    runRPCClient(8080, true)
+    runRPCClient(8080, true, false)
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old XML client, Go server\n\n")
     l = xmlrpc.StartServer(8081, xhand)
     if l != nil {
-        runRPCClient(8081, true)
+        runRPCClient(8081, true, true)
         l.Close()
     }
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- New XML client, Python server\n\n")
-    runMyXMLClient(8080)
+    runMyXMLClient(8080, false)
 
     fmt.Printf("\n============================\n\n")
     fmt.Printf("--- New XML client, Go server\n")
     l = xmlrpc.StartServer(8082, xhand)
     if l != nil{
-        runMyXMLClient(8082)
+        runMyXMLClient(8082, true)
         l.Close()
     }
 
@@ -142,13 +158,13 @@ func main() {
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old JSON client, Python server\n\n")
-    runRPCClient(8090, false)
+    runRPCClient(8090, false, false)
 
     fmt.Printf("\n============================\n")
     fmt.Printf("--- Old JSON client, Go server\n\n")
     l = xmlrpc.StartServer(8083, jhand)
     if l != nil {
-        runRPCClient(8083, false)
+        runRPCClient(8083, false, false)
         l.Close()
     }
 }

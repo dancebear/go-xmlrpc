@@ -11,6 +11,7 @@ import (
     "reflect"
     "rpc"
     "strings"
+    "url"
 )
 
 // An Error represents an internal failure in parsing or communication
@@ -57,10 +58,10 @@ func (nopCloser) Close() os.Error { return nil }
 
 type Client struct {
     conn net.Conn
-    url *http.URL
+    url *url.URL
 }
 
-func Open(url *http.URL) (net.Conn, *Error) {
+func Open(url *url.URL) (net.Conn, *Error) {
     if url.Scheme != "http" {
         return nil, &Error{Msg:fmt.Sprintf("Only supporting \"http\"," +
                 " not \"%s\"", url.Scheme)}
@@ -71,7 +72,7 @@ func Open(url *http.URL) (net.Conn, *Error) {
         addr += ":http"
     }
 
-    conn, cerr := net.Dial("tcp", "", addr)
+    conn, cerr := net.Dial("tcp", addr)
     if cerr != nil {
         return nil, &Error{Msg:cerr.String()}
     }
@@ -87,8 +88,8 @@ type RPCCodec interface {
     SerializeRequest(r *rpc.Request, params interface{}) (io.ReadWriter,
         int, os.Error)
     UnserializeResponse(r io.Reader, x interface{}) os.Error
-    HandleError(conn *http.Conn, code int, msg string)
-    UnserializeRequest(r io.Reader, conn *http.Conn) (string, interface{},
+    HandleError(conn http.ResponseWriter, code int, msg string)
+    UnserializeRequest(r io.Reader, conn http.ResponseWriter) (string, interface{},
         os.Error, bool)
     SerializeResponse(mArray []interface{}) ([]byte, os.Error)
     HandleTypeMismatch(origVal interface{},
@@ -97,8 +98,9 @@ type RPCCodec interface {
 
 type httpClient struct {
     codec RPCCodec
-    url *http.URL
+    url *url.URL
     conn *io.ReadWriteCloser
+    req *http.Request
     resp *http.Response
     seq uint64
 	ready chan uint64
@@ -137,8 +139,8 @@ func (cli *httpClient) WriteRequest(r *rpc.Request, params interface{}) os.Error
     req.ProtoMinor = 1
     req.Close = false
     req.Body = nopCloser{rw}
-    req.Header = map[string]string{
-        "Content-Type": cli.codec.ContentType(),
+    req.Header = map[string][]string{
+        "Content-Type": {cli.codec.ContentType()},
     }
     req.RawURL = cli.codec.RawURL()
     req.ContentLength = int64(len)
@@ -146,6 +148,8 @@ func (cli *httpClient) WriteRequest(r *rpc.Request, params interface{}) os.Error
     if werr := req.Write(*cli.conn); werr != nil {
         return werr
     }
+
+    cli.req = &req
 
     cli.ready <- r.Seq
 
@@ -161,7 +165,7 @@ func (cli *httpClient) ReadResponseHeader(r *rpc.Response) os.Error {
 
     reader := bufio.NewReader(*cli.conn)
 
-    resp, rerr := http.ReadResponse(reader, "POST")
+    resp, rerr := http.ReadResponse(reader, cli.req)
     if rerr != nil {
         return rerr
     } else if resp == nil {
@@ -187,34 +191,36 @@ func (cli *httpClient) ReadResponseBody(x interface{}) os.Error {
 }
 
 func (cli *httpClient) Close() os.Error {
-    return cli.conn.Close()
+     fmt.Printf("Not closing %v <%T>\n", cli.conn, cli.conn)
+     //return cli.conn.Close()
+     return nil
 }
 
 /* ----------------------------------------- */
 
 // NewRPCClientCodec returns a new rpc.ClientCodec for the RPCCodec
-func NewRPCClientCodec(codec RPCCodec, conn io.ReadWriteCloser, url *http.URL) rpc.ClientCodec {
+func NewRPCClientCodec(codec RPCCodec, conn io.ReadWriteCloser, url *url.URL) rpc.ClientCodec {
     return &httpClient{codec: codec, conn: &conn, url: url, ready: make(chan uint64)}
 }
 
 // NewNRPCClient returns a new rpc.Client to handle requests to the
 // set of services at the other end of the connection.
 func NewRPCClient(codec RPCCodec, conn io.ReadWriteCloser,
-    url *http.URL) *rpc.Client {
+    url *url.URL) *rpc.Client {
     return rpc.NewClientWithCodec(NewRPCClientCodec(codec, conn, url))
 }
 
 /* ----------------------------------------- */
 
-func OpenConnURL(host string, port int) (net.Conn, *http.URL, os.Error) {
+func OpenConnURL(host string, port int) (net.Conn, *url.URL, os.Error) {
     address := fmt.Sprintf("%s:%d", host, port)
 
-    conn, cerr := net.Dial("tcp", "", address)
+    conn, cerr := net.Dial("tcp", address)
     if cerr != nil {
         return nil, nil, cerr
     }
 
-    url, uerr := http.ParseURL("http://" + address)
+    url, uerr := url.Parse("http://" + address)
     if uerr != nil {
         return nil, nil, uerr
     }

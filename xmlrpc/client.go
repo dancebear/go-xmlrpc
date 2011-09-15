@@ -9,6 +9,7 @@ import (
     "net"
     "os"
     "rpc2"
+    "url"
 )
 
 type nopCloser struct {
@@ -19,7 +20,7 @@ func (nopCloser) Close() os.Error { return nil }
 
 type RPCClient struct {
     conn net.Conn
-    url *http.URL
+    url *url.URL
 }
 
 func (client *RPCClient) RPCCall(methodName string,
@@ -37,8 +38,8 @@ func (client *RPCClient) RPCCall(methodName string,
     req.ProtoMinor = 1
     req.Close = false
     req.Body = nopCloser{buf}
-    req.Header = map[string]string{
-        "Content-Type": "text/xml",
+    req.Header = map[string][]string{
+        "Content-Type": {"text/xml"},
     }
     req.RawURL = "/RPC2"
     req.ContentLength = int64(buf.Len())
@@ -56,7 +57,7 @@ func (client *RPCClient) RPCCall(methodName string,
     }
 
     reader := bufio.NewReader(client.conn)
-    resp, rerr := http.ReadResponse(reader, req.Method)
+    resp, rerr := http.ReadResponse(reader, &req)
     if rerr != nil {
         client.conn.Close()
         return nil, nil, &rpc2.Error{Msg:rerr.String()}
