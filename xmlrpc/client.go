@@ -57,7 +57,7 @@ func (client *RPCClient) RPCCall(methodName string,
     }
 
     reader := bufio.NewReader(client.conn)
-    resp, rerr := http.ReadResponse(reader, req.Method)
+    resp, rerr := http.ReadResponse(reader, &req)
     if rerr != nil {
         client.conn.Close()
         return nil, nil, &rpc2.Error{Msg:rerr.String()}
