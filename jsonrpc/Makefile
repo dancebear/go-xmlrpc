@@ -14,4 +14,4 @@ GOFILES=\
 include $(GOROOT)/src/Make.pkg
 
 GC+=-I../_obj
-LD+=-L../_obj -lrpc2
+LD+=-L../_obj
