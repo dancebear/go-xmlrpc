@@ -3,9 +3,9 @@ package xmlrpc
 import (
     "bufio"
     "bytes"
+    "errors"
     "fmt"
     "io"
-    "log"
     "net/http"
     "net/url"
     "reflect"
@@ -16,18 +16,6 @@ import (
 
 func isSpace(c byte) bool {
         return c == ' ' || c == '\t' || c == '\r' || c == '\n'
-}
-
-// An Error represents an internal failure in parsing or communication
-type Error struct {
-    Msg string
-}
-
-func (err *Error) String() string {
-    if err == nil {
-        return "NilError"
-    }
-    return err.Msg
 }
 
 // A Fault represents an error or exception in the procedure call
@@ -44,330 +32,6 @@ func (f *Fault) String() string {
     return fmt.Sprintf("%s (code#%d)", f.Msg, f.Code)
 }
 
-type parseState int
-
-var psStrings = []string { "Method", "MethodName", "InName", "Params",
-    "Param", "Value", "EndValue", "EndParam", "EndParams", "EndMethod", "???", }
-
-func (ps parseState) String() string { return psStrings[ps] }
-
-const (
-    psMethod parseState = iota
-    psName
-    psInName
-    psParms
-    psParam
-    psValue
-    psEndValue
-    psEndParam
-    psEndParms
-    psEndMethod
-)
-
-type structState int
-
-var ssStrings = []string { "Initial", "Member", "Name", "InName", "EndName",
-    "Value", "InValue", "EndValue", "EndMember", "EndStruct", "???", }
-
-func (ss structState) String() string { return ssStrings[ss] }
-
-const (
-    stInitial = iota
-    stMember
-    stName
-    stInName
-    stEndName
-    stValue
-    stInValue
-    stEndValue
-    stEndMember
-    stEndStruct
-)
-
-func getStateVals(st parseState, isResp bool) (string, bool) {
-    isEnd := (st == psEndMethod || st == psEndParms || st == psEndParam ||
-        st == psEndValue)
-
-    var tag string
-    switch st {
-    case psMethod, psEndMethod:
-        if isResp {
-            tag = "methodResponse"
-        } else {
-            tag = "methodCall"
-        }
-    case psName, psInName:
-        tag = "methodName"
-    case psParms, psEndParms:
-        tag = "params"
-    case psParam, psEndParam:
-        tag = "param"
-    case psValue, psEndValue:
-        tag = "value"
-    default:
-        tag = "???"
-    }
-
-    return tag, isEnd
-}
-
-func getNextStructState(state structState) (structState, string, bool) {
-    state += 1
-    var stateTag string
-    isEnd := state == stEndName || state == stEndValue ||
-        state == stEndMember || state == stEndStruct
-
-    switch state {
-    case stMember, stEndMember:
-        stateTag = "member"
-    case stName, stEndName:
-        stateTag = "name"
-    case stValue, stEndValue:
-        stateTag = "value"
-    case stEndStruct:
-        stateTag = "struct"
-    default:
-        stateTag = ""
-    }
-
-    return state, stateTag, isEnd
-}
-
-func parseStruct(p *xml.Decoder) (interface{}, *Error, bool) {
-    state, stateTag, wantEnd := getNextStructState(stInitial)
-
-    key := ""
-
-    valMap := make(map[string]interface{})
-
-    finished := false
-    for ! finished {
-        tok, err := p.Token()
-        if tok == nil {
-            break
-        }
-
-        if err != nil {
-            return nil, &Error{Msg:err.Error()}, false
-        }
-
-        const debug = false
-        if debug {
-            var tokStr string
-            if t2, ok := tok.(xml.CharData); ok {
-                tokStr = string([]byte(t2))
-            } else {
-                tokStr = fmt.Sprintf("%v", tok)
-            }
-
-            fmt.Printf("st %v tag %s wantEnd %v tok %s<%T>\n", state, stateTag,
-                wantEnd, tokStr, tok)
-        }
-
-        switch v := tok.(type) {
-        case xml.StartElement:
-            if wantEnd && state == stEndStruct && v.Name.Local == "member" {
-                state = stMember
-            } else if wantEnd || v.Name.Local != stateTag {
-                err := fmt.Sprintf("Expected struct tag <%s>, not <%s>",
-                    stateTag, v.Name.Local)
-                return nil, &Error{Msg:err}, false
-            }
-
-            if state == stValue {
-                val, err, sawEndValTag := unmarshalValue(p)
-                if err != nil {
-                    return nil, err, false
-                }
-
-                valMap[key] = val
-
-                if sawEndValTag {
-                    state = stEndValue
-                } else {
-                    state = stEndValue - 1
-                }
-            }
-
-            state, stateTag, wantEnd = getNextStructState(state)
-
-        case xml.EndElement:
-            if wantEnd && state == stEndStruct && v.Name.Local == "member" {
-                state = stMember
-            } else if ! wantEnd || v.Name.Local != stateTag {
-                err := fmt.Sprintf("Expected struct tag </%s>, not </%s>",
-                    stateTag, v.Name.Local)
-                return nil, &Error{Msg:err}, false
-            }
-
-            if state == stEndStruct {
-                finished = true
-            } else {
-                state, stateTag, wantEnd = getNextStructState(state)
-            }
-        case xml.CharData:
-            if state == stInName {
-                key = string([]byte(v))
-                state, stateTag, wantEnd = getNextStructState(state)
-            } else {
-                ignore := true
-                for _, c := range v {
-                    if !isSpace(c) {
-                        ignore = false
-                        break
-                    }
-                }
-
-                if ! ignore {
-                    err := &Error{Msg:fmt.Sprintf("Found" +
-                            " non-whitespace chars \"%s\" inside <struct>",
-                            string([]byte(v)))}
-                    return nil, err, false
-                }
-            }
-        }
-    }
-
-    return valMap, nil, true
-}
-
-func getValue(p *xml.Decoder, typeName string, b []byte) (interface{},
-    *Error, bool) {
-    var unimplemented = &Error{Msg:"Unimplemented"}
-
-    valStr := string(b)
-    if typeName == "array" {
-        return nil, unimplemented, false
-    } else if typeName == "base64" {
-        return nil, unimplemented, false
-    } else if typeName == "boolean" {
-        if valStr == "1" {
-            return true, nil, false
-        } else if valStr == "0" {
-            return false, nil, false
-        } else {
-            msg := fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
-            return nil, &Error{Msg:msg}, false
-        }
-    } else if typeName == "dateTime.iso8601" {
-        return nil, unimplemented, false
-    } else if typeName == "double" {
-        f, err := strconv.ParseFloat(valStr, 64)
-        if err != nil {
-            return f, &Error{Msg:err.Error()}, false
-        }
-
-        return f, nil, false
-    } else if typeName == "int" || typeName == "i4" {
-        i, err := strconv.Atoi(valStr)
-        if err != nil {
-            return i, &Error{Msg:err.Error()}, false
-        }
-
-        return i, nil, false
-    } else if typeName == "string" {
-        return valStr, nil, false
-    } else if typeName == "struct" {
-        return parseStruct(p)
-    }
-
-    return nil, &Error{Msg:fmt.Sprintf("Unknown type <%s> for \"%s\"",
-        typeName, valStr)}, false
-}
-
-func unmarshalValue(p *xml.Decoder) (interface{}, *Error, bool) {
-    var typeName string
-    var rtnVal interface{}
-
-    const noEndValTag = false
-
-    for {
-        tok, err := p.Token()
-        if tok == nil {
-            break
-        }
-
-        if err != nil {
-            return rtnVal, &Error{Msg:err.Error()}, noEndValTag
-        }
-
-        const debug = false
-        if debug {
-            var tokStr string
-            if t2, ok := tok.(xml.CharData); ok {
-                tokStr = string([]byte(t2))
-            } else {
-                tokStr = fmt.Sprintf("%v", tok)
-            }
-
-            fmt.Printf("ty %s rtn %v tok %s<%T>\n", typeName, rtnVal, tokStr,
-                tok)
-        }
-
-        switch v := tok.(type) {
-        case xml.StartElement:
-            if typeName != "" {
-                err := &Error{Msg:fmt.Sprintf("Found multiple types" +
-                    " (%s and %s) inside <value>", typeName, v.Name.Local)}
-                return nil, err, noEndValTag
-            }
-
-            typeName = v.Name.Local
-        case xml.EndElement:
-            if typeName == "" && v.Name.Local == "value" {
-                return "", nil, true
-            } else if typeName != v.Name.Local {
-                err := &Error{Msg:fmt.Sprintf("Found unexpected </%s>" +
-                    " (wanted </%s>)", v.Name.Local, typeName)}
-                return nil, err, noEndValTag
-            }
-
-            if typeName == "string" && rtnVal == nil {
-                rtnVal = ""
-            }
-            return rtnVal, nil, noEndValTag
-        case xml.CharData:
-            if typeName != "" && rtnVal == nil {
-                var valErr *Error
-                var sawEndTypeTag bool
-                rtnVal, valErr, sawEndTypeTag = getValue(p, typeName, v)
-                if valErr != nil {
-                    return rtnVal, valErr, noEndValTag
-                }
-
-                if sawEndTypeTag {
-                    return rtnVal, nil, noEndValTag
-                }
-            } else {
-                for _, c := range v {
-                    if !isSpace(c) {
-                        if rtnVal == nil {
-                            return string([]byte(v)), nil, noEndValTag
-                        }
-
-                        err := &Error{Msg:fmt.Sprintf("Found" +
-                            " non-whitespace chars \"%s\" inside <value>",
-                            string([]byte(v)))}
-                        return nil, err, noEndValTag
-                    }
-                }
-            }
-        default:
-            err := &Error{Msg:fmt.Sprintf("Not handling <value> %v" +
-                " (type %T)", v, v)}
-            return nil, err, noEndValTag
-        }
-    }
-
-    if typeName == "" {
-        return rtnVal, &Error{Msg:"No type found inside <value>"},
-        noEndValTag
-    }
-
-    return rtnVal, &Error{Msg:fmt.Sprintf("Closing tag not found for" +
-        " <%s>", typeName)}, noEndValTag
-}
-
 func extractParams(v []interface{}) interface{} {
     if len(v) == 0 {
         return nil
@@ -378,243 +42,637 @@ func extractParams(v []interface{}) interface{} {
     return v
 }
 
-// Translate an XML string into a local data object
-func Unmarshal(r io.Reader) (string, interface{}, *Error, *Fault) {
-    p := xml.NewDecoder(r)
+func getMethodName(p *xml.Decoder) (string, error) {
+    var methodName string
 
-    state := psMethod
-    isResp := true
-    stateTag := "???"
-    wantEnd := false
-    methodName := ""
-
-    params := make([]interface{}, 0)
-
-    isFault := false
-    var faultVal *Fault
-
+    inName := false
     for {
-        tok, err := p.Token()
+        tok, err := getNextToken(p)
         if tok == nil {
-            break
+            return "", errors.New("Unexpected end-of-file in getMethodName()")
+        } else if err != nil {
+            return "", err
         }
 
-        if err != nil {
-            return methodName, extractParams(params),
-            &Error{Msg:err.Error()}, faultVal
-        }
-
-        const debug = false
-        if debug {
-            var tokStr string
-            if t2, ok := tok.(xml.CharData); ok {
-                tokStr = string([]byte(t2))
+        if tok.IsText() {
+            if !inName {
+                // ignore text outside <methodName> and </methodName>
             } else {
-                tokStr = fmt.Sprintf("%v", tok)
+                if methodName != "" {
+                    return "", errors.New(fmt.Sprintf("Multiple method names" +
+                        " (\"%s\" and \"%s\")", methodName, tok.Text()))
+                }
+
+                methodName = tok.Text()
             }
 
-            fmt.Printf("ps %s tag %s wantEnd %v tok %s<%T>\n", state, stateTag,
-                wantEnd, tokStr, tok)
+            continue
         }
 
-        switch v := tok.(type) {
-        case xml.StartElement:
-            if state == psMethod {
-                if v.Name.Local == "methodResponse" {
-                    state = psParms
-                    isResp = true
-                    stateTag, wantEnd = getStateVals(state, isResp)
-                } else if v.Name.Local == "methodCall" {
-                    state = psName
-                    isResp = false
-                    stateTag, wantEnd = getStateVals(state, isResp)
-                } else {
-                    err := &Error{Msg:fmt.Sprintf("Unexpected initial" +
-                            " tag <%s>", v.Name.Local)}
-                    return methodName, extractParams(params), err, faultVal
+        if tok.Is(TokenMethodName) {
+            if !tok.IsStart() {
+                if !inName {
+                    return "", errors.New("Got </methodName> without" +
+                        " <methodName>")
                 }
-            } else if v.Name.Local == stateTag && ! wantEnd {
-                if state != psValue {
-                    state += 1
-                    stateTag, wantEnd = getStateVals(state, isResp)
-                } else {
-                    var uVal interface{}
-                    var uErr *Error
-                    var sawEndValTag bool
-                    uVal, uErr, sawEndValTag = unmarshalValue(p)
-                    if uErr != nil {
-                        return methodName, extractParams(params), uErr, faultVal
+
+                break
+            }
+
+            inName = tok.IsStart()
+
+            continue
+        }
+
+        return "", errors.New(fmt.Sprintf("Unexpected methodName token %s",
+            tok))
+    }
+
+    return methodName, nil
+}
+
+func getMethodData(p *xml.Decoder) ([]interface{}, *Fault, error) {
+    var params = make([]interface{}, 0)
+    var fault *Fault
+
+    // state variables
+    inParams := false
+    inParam := false
+    inFault := false
+
+    for {
+        tok, err := getNextToken(p)
+        if tok == nil {
+            return nil, nil, errors.New("Unexpected end-of-file in" +
+                " getMethodData()")
+        } else if err != nil {
+            return nil, nil, err
+        }
+
+        if tok.Is(TokenParams) {
+            if !tok.IsStart() {
+                // found end marker for tag, so we're done
+                break
+            }
+
+            inParams = true
+            continue
+        } else if inParams {
+            if tok.Is(TokenParam) {
+                inParam = tok.IsStart()
+                continue
+            } else if inParam {
+                p, perr := getValue(p)
+                if perr != nil {
+                    return nil, nil, perr
+                }
+
+                params = append(params, p)
+                inParam = false
+            }
+        }
+
+        if tok.Is(TokenFault) {
+            if !tok.IsStart() {
+                // found end marker for tag, so we're done
+                break
+            }
+
+            inFault = true
+            continue
+        } else if inFault {
+            var ferr error
+            fault, ferr = getFault(p)
+            if ferr != nil {
+                return nil, nil, ferr
+            }
+
+            inFault = false
+        }
+
+        if !tok.IsText() {
+            err = errors.New(fmt.Sprintf("Unexpected methodData token %s", tok))
+            return nil, nil, err
+        }
+    }
+
+    return params, fault, nil
+}
+
+func getFault(p *xml.Decoder) (*Fault, error) {
+    val, err := getValue(p)
+    if err != nil {
+        return nil, err
+    }
+
+    fmap := val.(map[string]interface{})
+
+    return &Fault{Code:fmap["faultCode"].(int),
+        Msg:fmap["faultString"].(string)}, nil
+}
+
+func getValue(p *xml.Decoder) (interface{}, error) {
+    var value interface{}
+
+    for {
+        tok, err := getNextToken(p)
+        if tok == nil {
+            return nil, errors.New("Unexpected end-of-file in getValue()")
+        } else if err != nil {
+            return nil, err
+        }
+
+        if tok.Is(TokenValue) {
+            if !tok.IsStart() {
+                // found end marker for tag, so we're done
+                break
+            }
+
+            var sawEndValue bool
+            value, sawEndValue, err = getValueData(p)
+            if err != nil {
+                return nil, err
+            } else if sawEndValue {
+                if value == nil {
+                    value = ""
+                }
+
+                break
+            }
+
+            continue
+        }
+
+        if !tok.IsText() {
+            err = errors.New(fmt.Sprintf("Unexpected value token %v", tok))
+            return nil, err
+        }
+    }
+
+    return value, nil
+}
+
+func getValueData(p *xml.Decoder) (interface{}, bool, error) {
+    var toktype = TokenUnknown
+    var value interface{}
+const debug = false
+if(debug){fmt.Printf("VALDATA top\n")}
+    for {
+        tok, err := getNextToken(p)
+        if tok == nil {
+            return nil, false, errors.New("Unexpected end-of-file" +
+                " in getValue()")
+        } else if err != nil {
+            return nil, false, err
+        }
+if(debug){fmt.Printf("VALDATA %s IsData %v\n", tok, tok.IsDataType())}
+
+        if tok.IsDataType() {
+            if tok.IsStart() {
+                if toktype == TokenUnknown {
+                    toktype = tok.token
+                    value, err = getData(p, tok)
+if(debug){fmt.Printf("GetData -> %v<%T>\n", value, value)}
+                    if err != nil {
+                        return nil, false, err
                     }
-                    if isFault {
-                        if uVal == nil {
-                            err := &Error{Msg:"No fault value returned"}
-                            return methodName, extractParams(params), err, nil
+                } else {
+                    msg := "Found multiple starting tokens in getValueData()"
+                    return nil, false, errors.New(msg)
+                }
+            } else {
+                if !tok.Is(toktype) {
+                    msg := fmt.Sprintf("Unexpected valueData token %s", tok)
+                    return nil, false, errors.New(msg)
+                }
+
+                // found end marker for tag, so we're done
+                break
+            }
+        } else if tok.IsText() {
+            if value == nil {
+                value = tok.Text()
+            }
+        } else if tok.Is(TokenValue) {
+            return value, true, nil
+        } else {
+            err = errors.New(fmt.Sprintf("Unexpected valueData token %s", tok))
+            return nil, false, err
+        }
+    }
+
+if(debug){fmt.Printf("VALDATA -> %v\n", value)}
+    return value, false, nil
+}
+
+func getStruct(p *xml.Decoder) (map[string]interface{}, error) {
+    var data = make(map[string]interface{})
+const debug = false
+
+    // state variables
+    inStruct := true
+    inMember := false
+    inName := false
+
+    var name string
+    gotName := false
+
+    for {
+        tok, err := getNextToken(p)
+if(debug){fmt.Printf("STRUCT %s inStc %v InMbr %v inName %v gotName %v name %v\n",
+    tok, inStruct, inMember, inName, gotName, name)}
+        if tok == nil {
+            return nil, errors.New("Unexpected end-of-file in getStruct()")
+        } else if err != nil {
+            return nil, err
+        }
+
+        if tok.Is(TokenStruct) {
+            if !tok.IsStart() {
+                // found end marker for tag, so we're done
+                break
+            }
+
+            inStruct = true
+            continue
+        } else if inStruct {
+            if tok.Is(TokenMember) {
+                inMember = tok.IsStart()
+                gotName = false
+                continue
+            } else if inMember {
+                if tok.Is(TokenName) {
+                    inName = tok.IsStart()
+                    if !inName {
+                        gotName = true
+                    }
+
+                    if gotName && !inName {
+                        value, verr := getValue(p)
+                        if verr != nil {
+                            return nil, verr
                         }
 
-                        if fmap, ok := uVal.(map[string]interface{}); ! ok {
-                            err := fmt.Sprintf("Bad type %T for fault", uVal)
-                            return methodName, extractParams(params),
-                            &Error{Msg:err}, nil
-                        } else {
-                            if code, ok := fmap["faultCode"].(int); ! ok {
-                                err := fmt.Sprintf("Fault code should be an" +
-                                    " int, not %T", code)
-                                return methodName, extractParams(params),
-                                &Error{Msg:err}, nil
-                            } else if msg, ok := fmap["faultString"].(string);
-                            ! ok {
-                                err := fmt.Sprintf("Fault string should be a" +
-                                    " string, not %T", msg)
-                                return methodName, extractParams(params),
-                                &Error{Msg:err}, nil
-                            } else {
-                                faultVal = &Fault{Code:code, Msg:msg}
+                        data[name] = value
+                        gotName = false
+                    }
+
+                    continue
+                } else if inName && tok.IsText() {
+                    name = tok.Text()
+                }
+            }
+        }
+
+        if !tok.IsText() {
+            err = errors.New(fmt.Sprintf("Unexpected struct token %s", tok))
+            return nil, err
+        }
+    }
+
+if(debug){fmt.Printf("STRUCT -> %v\n", data)}
+    return data, nil
+}
+
+func getArray(p *xml.Decoder) (interface{}, error) {
+    var data = make([]interface{}, 0)
+const debug = false
+
+    // state variables
+    inArray := true
+    inData := false
+
+if(debug){fmt.Printf("ARRAY top\n")}
+    for {
+        tok, err := getNextToken(p)
+if(debug){fmt.Printf("ARRAY %s inAry %v InDat %v\n", tok, inArray, inData)}
+        if tok == nil {
+            return nil, errors.New("Unexpected end-of-file in getArray()")
+        } else if err != nil {
+            return nil, err
+        }
+
+        if tok.Is(TokenArray) {
+            if !tok.IsStart() {
+                // found end marker for tag, so we're done
+                break
+            }
+
+            inArray = true
+            continue
+        } else if inArray {
+            if tok.Is(TokenData) {
+                inData = tok.IsStart()
+                continue
+            } else if inData {
+                if tok.Is(TokenValue) {
+                    if tok.IsStart() {
+                        value, sawEndValue, verr := getValueData(p)
+                        if verr != nil {
+                            return nil, verr
+                        } else if sawEndValue {
+                            if value == nil {
+                                value = ""
                             }
                         }
 
-                        if ! sawEndValTag {
-                            state += 1
-                            stateTag, wantEnd = getStateVals(state, isResp)
-                        } else {
-                            state = psEndParms
-                            stateTag = "fault"
-                            wantEnd = true
-                        }
-                    } else {
-                        params = append(params, uVal)
-                        if ! sawEndValTag {
-                            state += 1
-                        } else {
-                            state = psEndParam
-                        }
-                        stateTag, wantEnd = getStateVals(state, isResp)
+if(debug){fmt.Printf("ARRAY value -> %v\n", value)}
+                        data = append(data, value)
                     }
                 }
-            } else if state == psParms && v.Name.Local == "fault" {
-                isFault = true
-                state = psValue
-                stateTag, wantEnd = getStateVals(state, isResp)
-            } else if wantEnd && state == psEndParms &&
-                v.Name.Local == "param" {
-                state = psValue
-                stateTag, wantEnd = getStateVals(state, isResp)
-            } else {
-                err := &Error{Msg:fmt.Sprintf("Unexpected <%s> token" +
-                        " for state %s", v.Name.Local, state)}
-                return methodName, extractParams(params), err, faultVal
+
+                continue
             }
-        case xml.EndElement:
-            if state == psEndMethod {
-                if methodName == "" {
-                    stateTag = "methodResponse"
-                } else {
-                    stateTag = "methodCall"
-                }
-                if v.Name.Local == stateTag {
-                    state += 1
-                    stateTag = "???"
-                    wantEnd = false
-                }
-            } else if v.Name.Local == stateTag && wantEnd {
-                if isFault && state == psEndValue {
-                    state = psEndParms
-                    stateTag = "fault"
-                    wantEnd = true
-                } else {
-                    state += 1
-                    stateTag, wantEnd = getStateVals(state, isResp)
-                }
-            } else if state == psParam && ! wantEnd &&
-                v.Name.Local == "params" {
-                state = psEndMethod
-                stateTag, wantEnd = getStateVals(state, isResp)
-            } else {
-                err := &Error{Msg:fmt.Sprintf("Unexpected </%s> token" +
-                        " for state %s", v.Name.Local, state)}
-                return methodName, extractParams(params), err, faultVal
-            }
-        case xml.CharData:
-            if state == psInName {
-                methodName = string([]byte(v))
-                wantEnd = true
-            } else {
-                for _, c := range v {
-                    if !isSpace(c) {
-                        err := fmt.Sprintf("Found non-whitespace" +
-                            " chars \"%s\" for state %s", string([]byte(v)),
-                            state)
-                        return methodName, extractParams(params),
-                        &Error{Msg:err}, faultVal
-                    }
-                }
-            }
-        case xml.ProcInst:
-            // ignored
-        default:
-            err := &Error{Msg:fmt.Sprintf("Not handling %v (type %T)" +
-                    " for state %s", v, v, state)}
-            return methodName, extractParams(params), err, faultVal
+        }
+
+        if !tok.IsText() {
+            err = errors.New(fmt.Sprintf("Unexpected array token %s", tok))
+            return nil, err
         }
     }
 
-    return methodName, extractParams(params), nil, faultVal
+/*
+    if data == nil {
+        return nil, nil
+    }
+
+    var array = reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(data[0])),
+        len(data), len(data))
+    for i := 0; i < len(data); i++ {
+        v := reflect.ValueOf(data[i])
+fmt.Printf("#%d append %v<%T> to %v<%T>\n", i, v, v, array, array)
+        //array = appendValue(array, data[i])
+        array = reflect.Append(array, v)
+    }
+
+    if(debug){fmt.Printf("ARRAY -> %v<%T>\n", array, array)}
+    return array.Slice(0, array.Len(), nil
+*/
+    return data, nil
+}
+
+func getText(p *xml.Decoder) (string, error) {
+    tok, err := getNextToken(p)
+    if tok == nil {
+        return "", errors.New("Unexpected end-of-file in getText()")
+    } else if err != nil {
+        return "", err
+    }
+
+    if tok.Is(TokenString) && !tok.IsStart() {
+        return "", nil
+    } else if !tok.IsText() {
+        return "", errors.New(fmt.Sprintf("Unexpected token %s in getText()",
+            tok))
+    }
+
+    return tok.Text(), nil
+}
+
+func getData(p *xml.Decoder, tok *XToken) (interface{}, error) {
+    var valStr string
+    var err error
+
+const debug = false
+if(debug){fmt.Printf("DATA top tok %v\n", tok)}
+    switch tok.token {
+    case TokenArray:
+        return getArray(p)
+    case TokenBase64:
+        return nil, errors.New("parseDataString(base64) unimplemented")
+    case TokenBoolean:
+        valStr, err = getText(p)
+        if err != nil {
+            return nil, err
+        }
+
+        if valStr == "1" {
+            return true, nil
+        } else if valStr == "0" {
+            return false, nil
+        } else {
+            msg := fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
+            return nil, errors.New(msg)
+        }
+    case TokenDateTime:
+        return nil, errors.New("getValue(dateTime) unimplemented")
+    case TokenDouble:
+        valStr, err = getText(p)
+        if err != nil {
+            return nil, err
+        }
+
+        f, ferr := strconv.ParseFloat(valStr, 64)
+        if ferr != nil {
+            return nil, ferr
+        }
+
+        return f, nil
+    case TokenInt:
+        valStr, err = getText(p)
+        if err != nil {
+            return nil, err
+        }
+
+        i, err := strconv.Atoi(valStr)
+        if err != nil {
+            return nil, err
+        }
+
+        return i, nil
+    case TokenNil:
+        return nil, nil
+    case TokenString:
+        valStr, err = getText(p)
+        if err != nil {
+            return nil, err
+        }
+
+        return valStr, nil
+    case TokenStruct:
+        return getStruct(p)
+    default:
+        break
+    }
+
+    return nil, errors.New(fmt.Sprintf("Unknown type %s oin getData()",
+        tok.Name()))
 }
 
 // Translate an XML string into a local data object
-func UnmarshalString(s string) (string, interface{}, *Error,
-    *Fault) {
-    return Unmarshal(strings.NewReader(s))
-}
+func Unmarshal(r io.Reader) (string, interface{}, error, *Fault) {
+    p := xml.NewDecoder(r)
 
-func wrapParam(xval interface{}) (string, *Error) {
-    var valStr string
+    var methodName string
+    var params []interface{}
+    var fault *Fault
 
-    if xval == nil {
-        valStr = "<nil/>"
-    } else {
-        switch val := xval.(type) {
-        case bool:
-            var bval int
-            if val {
-                bval = 1
-            } else {
-                bval = 0
+    isResp := false
+    for {
+        tok, err := getNextToken(p)
+        if tok == nil {
+            break
+        } else if err != nil {
+            return "", nil, err, nil
+        }
+
+        if tok.IsNone() || tok.IsText() {
+            continue
+        }
+
+        if tok.Is(TokenMethodResponse) {
+            if !tok.IsStart() {
+                break
             }
-            valStr = fmt.Sprintf("<boolean>%d</boolean>", bval)
-        case float32:
-            valStr = fmt.Sprintf("<double>%f</double>", val)
-        case float64:
-            valStr = fmt.Sprintf("<double>%f</double>", val)
-        case int:
-            valStr = fmt.Sprintf("<int>%d</int>", val)
-        case int16:
-            valStr = fmt.Sprintf("<int>%d</int>", val)
-        case int32:
-            valStr = fmt.Sprintf("<int>%d</int>", val)
-        case int64:
-            valStr = fmt.Sprintf("<int>%d</int>", val)
-        case string:
-            valStr = fmt.Sprintf("<string>%s</string>", val)
-        default:
-            err := fmt.Sprintf("Not wrapping type %T (%v)", val, val)
-            return "", &Error{Msg:err}
+
+            isResp = tok.IsStart()
+        } else if tok.Is(TokenMethodCall) {
+            if !tok.IsStart() {
+                break
+            }
+        } else {
+            msg := fmt.Sprintf("Unrecognized tag <%s>", tok.Name())
+            return "", nil, errors.New(msg), nil
+        }
+
+        if !isResp && tok.IsStart() {
+            var merr error
+            methodName, merr = getMethodName(p)
+            if merr != nil {
+                return "", nil, merr, nil
+            }
+        }
+
+        var perr error
+        params, fault, perr = getMethodData(p)
+        if perr != nil {
+            return "", nil, perr, nil
         }
     }
 
-    return fmt.Sprintf(`    <param>
-      <value>
-        %s
-      </value>
-    </param>
-`, valStr), nil
+    return methodName, extractParams(params), nil, fault
+}
+
+// Translate an XML string into a local data object
+func UnmarshalString(s string) (string, interface{}, error, *Fault) {
+const debug = false
+if(debug){fmt.Printf("--- XML\n%s\nXML ---\n", s)}
+    return Unmarshal(strings.NewReader(s))
+}
+
+func wrapArray(w io.Writer, val reflect.Value) error {
+    fmt.Fprintf(w, "<array><data>\n")
+
+    for i := 0; i < val.Len(); i++ {
+        fmt.Fprintf(w, "<value>")
+        aerr := wrapValue(w, val.Index(i))
+        if aerr != nil {
+            return aerr
+        }
+        fmt.Fprintf(w, "</value>\n")
+    }
+
+    fmt.Fprintf(w, "</data></array>")
+    return nil
+}
+
+func wrapParam(w io.Writer, i int, xval interface{}) error {
+    var valStr string
+
+    fmt.Fprintf(w, "    <param>\n      <value>\n        ")
+    if xval == nil {
+        valStr = "<nil/>"
+    } else {
+        err := wrapValue(w, reflect.ValueOf(xval))
+        if err != nil {
+            return err
+        }
+    }
+    fmt.Fprintf(w, "%s\n      </value>\n    </param>\n", valStr)
+
+    return nil
+}
+
+func wrapValue(w io.Writer, val reflect.Value) error {
+    var isError = false
+
+    switch val.Kind() {
+    case reflect.Bool:
+        var bval int
+        if val.Bool() {
+            bval = 1
+        } else {
+            bval = 0
+        }
+        fmt.Fprintf(w, "<boolean>%d</boolean>", bval)
+    case reflect.Float32:
+        fmt.Fprintf(w, "<double>%f</double>", val.Float())
+    case reflect.Float64:
+        fmt.Fprintf(w, "<double>%f</double>", val.Float())
+    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+        fmt.Fprintf(w, "<int>%d</int>", val.Int())
+    case reflect.String:
+        fmt.Fprintf(w, "<string>%s</string>", val.String())
+    case reflect.Uint:
+        isError = true
+    case reflect.Uint8:
+        isError = true
+    case reflect.Uint16:
+        isError = true
+    case reflect.Uint32:
+        isError = true
+    case reflect.Uint64:
+        isError = true
+    case reflect.Uintptr:
+        isError = true
+    case reflect.Complex64:
+        isError = true
+    case reflect.Complex128:
+        isError = true
+    case reflect.Array:
+        aerr := wrapArray(w, val)
+        if aerr != nil {
+            return aerr
+        }
+    case reflect.Chan:
+        isError = true
+    case reflect.Func:
+        isError = true
+    case reflect.Interface:
+        isError = true
+    case reflect.Map:
+        isError = true
+    case reflect.Ptr:
+        isError = true
+    case reflect.Slice:
+        aerr := wrapArray(w, val)
+        if aerr != nil {
+            return aerr
+        }
+    case reflect.Struct:
+        isError = true
+    case reflect.UnsafePointer:
+        isError = true
+    default:
+        err := fmt.Sprintf("Unknown Kind %v for %T (%v)", val.Kind(),
+            val, val)
+        return errors.New(err)
+    }
+
+    if isError {
+        err := fmt.Sprintf("Not wrapping type %v (%v)", val.Kind().String(), val)
+        return errors.New(err)
+    }
+
+    return nil
 }
 
 // Write a local data object as an XML-RPC request
-func Marshal(w io.Writer, methodName string, args ... interface{}) *Error {
+func Marshal(w io.Writer, methodName string, args ... interface{}) error {
     return marshalArray(w, methodName, args)
 }
 
-func marshalArray(w io.Writer, methodName string, args []interface{}) *Error {
+func marshalArray(w io.Writer, methodName string, args []interface{}) error {
     var name string
     var addExtra bool
     if methodName == "" {
@@ -632,13 +690,11 @@ func marshalArray(w io.Writer, methodName string, args []interface{}) *Error {
 
     fmt.Fprintf(w, "  <params>\n")
 
-    for _, a := range args {
-        valStr, err := wrapParam(a)
+    for i, a := range args {
+        err := wrapParam(w, i, a)
         if err != nil {
             return err
         }
-
-        fmt.Fprintf(w, "%s", valStr)
     }
 
     fmt.Fprintf(w, "  </params>\n</method%s>\n", name)
@@ -651,19 +707,19 @@ type Client struct {
     urlStr string
 }
 
-func NewClient(host string, port int) (c *Client, err *Error) {
+func NewClient(host string, port int) (*Client, error) {
     address := fmt.Sprintf("http://%s:%d/RPC2", host, port)
 
     uurl, uerr := url.Parse(address)
     if uerr != nil {
-        return nil, &Error{Msg:uerr.Error()}
+        return nil, uerr
     }
 
     return &Client{urlStr:uurl.String()}, nil
 }
 
 func (c *Client) RPCCall(methodName string,
-    args ... interface{}) (interface{}, *Error, *Fault) {
+    args ... interface{}) (interface{}, error, *Fault) {
 
     buf := bytes.NewBufferString("")
     berr := marshalArray(buf, methodName, args)
@@ -674,18 +730,32 @@ func (c *Client) RPCCall(methodName string,
     req, err := http.NewRequest("POST", c.urlStr,
         strings.NewReader(buf.String()))
     if err != nil {
-        return nil, &Error{Msg:err.Error()}, nil
+        return nil, err, nil
     }
 
     req.Header.Add("Content-Type", "text/xml")
 
     r, err := c.Do(req)
     if err != nil {
-        return nil, &Error{Msg:err.Error()}, nil
+        return nil, err, nil
     } else if r == nil {
-        err := fmt.Sprintf("PostString for %s returned nil response\n",
+        msg := fmt.Sprintf("PostString for %s returned nil response\n",
             methodName)
-        return nil, &Error{Msg:err}, nil
+        return nil, errors.New(msg), nil
+    }
+
+    const debug = false
+    if (debug) {
+        scanner := bufio.NewScanner(r.Body)
+        for scanner.Scan() {
+            fmt.Println(scanner.Text())
+        }
+
+        if err := scanner.Err(); err != nil {
+            fmt.Printf("ERROR: %v\n", err)
+        }
+
+        return nil, errors.New("Dumped request"), nil
     }
 
     _, pval, perr, pfault := Unmarshal(r.Body)
@@ -695,159 +765,4 @@ func (c *Client) RPCCall(methodName string,
     }
 
     return pval, perr, pfault
-}
-
-func DumpResponse(r io.Reader) (interface{}, string) {
-    scanner := bufio.NewScanner(r)
-    for scanner.Scan() {
-        fmt.Println(scanner.Text())
-    }
-
-    if err := scanner.Err(); err != nil {
-        log.Fatal(err)
-    }
-
-    return nil, ""
-}
-
-/* ----------------------- */
-
-type methodData struct {
-    obj interface{}
-    method reflect.Method
-}
-
-type Handler struct {
-    methods map[string]*methodData
-}
-
-func NewHandler() *Handler {
-    h := new(Handler)
-    h.methods = make(map[string]*methodData)
-    return h
-}
-
-func (h *Handler) Register(prefix string, obj interface{}) error {
-    ot := reflect.TypeOf(obj)
-
-    for i := 0; i < ot.NumMethod(); i++ {
-        m := ot.Method(i)
-        if m.PkgPath != "" {
-            continue
-        }
-
-        var name string
-        if prefix == "" {
-            name = m.Name
-        } else {
-            name = prefix + "." + m.Name
-        }
-
-        md := &methodData{obj: obj, method: m}
-        h.methods[name] = md
-        h.methods[strings.ToLower(name)] = md
-    }
-
-    return nil
-}
-
-func writeFault(out io.Writer, code int, msg string) {
-    fmt.Fprintf(out, `<?xml version="1.0"?>
-<methodResponse>
-  <fault>
-    <value>
-        <struct>
-          <member>
-            <name>faultCode</name>
-            <value><int>%d</int></value>
-          </member>
-          <member>
-            <name>faultString</name>
-            <value>%s</value>
-          </member>
-        </struct>
-    </value>
-  </fault>
-</methodResponse>`, code, msg)
-}
-
-const errNotWellFormed = -32700
-const errUnknownMethod = -32601
-const errInvalidParams = -32602
-const errInternal = -32603
-
-func (h *Handler) handleRequest(resp http.ResponseWriter, req *http.Request) {
-    methodName, params, err, fault := Unmarshal(req.Body)
-
-    if err != nil {
-        writeFault(resp, errNotWellFormed,
-            fmt.Sprintf("Unmarshal error: %v", err))
-        return
-    } else if fault != nil {
-        writeFault(resp, fault.Code, fault.Msg)
-        return
-    }
-
-    var args []interface{}
-    var ok bool
-
-    if args, ok = params.([]interface{}); !ok {
-        args := make([]interface{}, 1, 1)
-        args[0] = params
-    }
-
-    var mData *methodData
-
-    if mData, ok = h.methods[methodName]; !ok {
-        writeFault(resp, errUnknownMethod,
-            fmt.Sprintf("Unknown method \"%s\"", methodName))
-        return
-    }
-
-    if len(args) + 1 != mData.method.Type.NumIn() {
-        writeFault(resp, errInvalidParams,
-            fmt.Sprintf("Bad number of parameters for method \"%s\"," +
-                " (%d != %d)", methodName, len(args),
-                mData.method.Type.NumIn()))
-        return
-    }
-
-    vals := make([]reflect.Value, len(args) + 1, len(args) + 1)
-
-    vals[0] = reflect.ValueOf(mData.obj)
-    for i := 1; i < mData.method.Type.NumIn(); i++ {
-        if mData.method.Type.In(i) != reflect.TypeOf(args[i - 1]) {
-            writeFault(resp, errInvalidParams,
-                fmt.Sprintf("Bad %s argument #%d (%v should be %v)",
-                    methodName, i - 1, reflect.TypeOf(args[i - 1]),
-                    mData.method.Type.In(i)))
-            return
-        }
-
-        vals[i] = reflect.ValueOf(args[i - 1])
-    }
-
-    rtnVals := mData.method.Func.Call(vals)
-
-    mArray := make([]interface{}, len(rtnVals), len(rtnVals))
-    for i := 0; i < len(rtnVals); i++ {
-        mArray[i] = rtnVals[i].Interface()
-    }
-
-    buf := bytes.NewBufferString("")
-    err = marshalArray(buf, "", mArray)
-    if err != nil {
-        writeFault(resp, errInternal, fmt.Sprintf("Faied to marshal %s: %v",
-            methodName, err))
-        return
-    }
-
-    buf.WriteTo(resp)
-}
-
-func StartServer(port int) *Handler {
-    h := NewHandler()
-    http.HandleFunc("/", h.handleRequest)
-    go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
-    return h
 }

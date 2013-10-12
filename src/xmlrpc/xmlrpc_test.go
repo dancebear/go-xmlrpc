@@ -4,6 +4,7 @@ import (
     "bytes"
     "fmt"
     "reflect"
+    "strings"
     "testing"
 )
 
@@ -58,22 +59,27 @@ func getTypeString(val interface{}, noSpaces bool) string {
         }
         valStr += fmt.Sprintf("%s</struct>%s", preSpace, postSpace)
         return valStr
-    case ([]interface{}):
-        fmt.Printf("XXX array\n")
     }
 
-    valKind := reflect.TypeOf(val).Kind()
-    if valKind == reflect.Array || valKind == reflect.Slice {
-        return "<array>foo</array>"
+    rval := reflect.ValueOf(val)
+    if rval.Kind() == reflect.Array || rval.Kind() == reflect.Slice {
+        buf := bytes.NewBufferString("\n        <array><data>\n")
+        for i := 0; i < rval.Len(); i++ {
+            buf.WriteString("<value>")
+            wrapValue(buf, rval.Index(i))
+            buf.WriteString("</value>\n")
+        }
+        buf.WriteString("</data></array>\n      ")
+        return buf.String()
     } else {
-        fmt.Printf("Not handling Kind %v\n", valKind)
+        fmt.Printf("Not handling Kind %v\n", rval.Kind())
     }
 
     return fmt.Sprintf("<???>%v(%T)</???>", val, val)
 }
 
 // Translate a local data object into an XML string
-func marshalString(methodName string, args ... interface{}) (string, *Error) {
+func marshalString(methodName string, args ... interface{}) (string, error) {
     buf := bytes.NewBufferString("")
     err := marshalArray(buf, methodName, args)
     if err != nil {
@@ -120,7 +126,7 @@ func parseUnimplemented(t *testing.T, methodName string, expVal interface{}) {
     name, val, err, fault := UnmarshalString(xmlStr)
     if err == nil {
         t.Fatalf("Unimplemented type didn't return an error")
-    } else if err.Msg != "Unimplemented" {
+    } else if !strings.Contains(err.Error(), "nimplemented") {
         t.Fatalf("Returned unexpected error %s", err)
     }
 
@@ -216,18 +222,16 @@ func TestMakeRequestInt(t *testing.T) {
     }
 }
 
-func TestMakeRequestMultiParam(t *testing.T) {
-    expVal1 := 123.456
-    expVal2 := false
-    expVal3 := 9876
+func TestMakeRequestArray(t *testing.T) {
+    expVal := []int{ 1, 2, 3, 4 }
     methodName := "foo"
 
-    xmlStr, err := marshalString(methodName, expVal1, expVal2, expVal3)
+    xmlStr, err := marshalString(methodName, expVal)
     if err != nil {
         t.Fatalf("Returned error %s", err)
     }
 
-    expStr := wrapMethod(methodName, expVal1, expVal2, expVal3)
+    expStr := wrapMethod(methodName, expVal)
     if xmlStr != expStr {
         t.Fatalf("Returned \"%s\", not \"%s\"", xmlStr, expStr)
     }
@@ -273,9 +277,9 @@ func TestParseRequestInt(t *testing.T) {
     wrapAndParse(t, "foo", 54321)
 }
 
-func TestParseResponseArray(t *testing.T) {
+func XXXTestParseResponseArray(t *testing.T) {
     var array = []int { 1, -1, 0, 1234567 }
-    parseUnimplemented(t, "", array)
+    wrapAndParse(t, "", array)
 }
 
 func TestParseResponseBase64(t *testing.T) {
@@ -399,6 +403,19 @@ func TestParseResponseStringRawEmpty(t *testing.T) {
 </methodResponse>`
 
     parseAndCheck(t, "", "", xmlStr)
+}
+
+func TestParseResponseStringEscapedChars(t *testing.T) {
+    xmlStr := `<?xml version='1.0'?>
+<methodResponse>
+  <params>
+    <param>
+      <value>&lt;/value&gt;</value>
+    </param>
+  </params>
+</methodResponse>`
+
+    parseAndCheck(t, "", "</value>", xmlStr)
 }
 
 func TestParseResponseStruct(t *testing.T) {
