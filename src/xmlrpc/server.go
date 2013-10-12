@@ -24,7 +24,7 @@ func NewHandler() *Handler {
     return h
 }
 
-func (h *Handler) Register(prefix string, obj interface{}) error {
+func (h *Handler) Register(obj interface{}, mapper func(string)string) error {
     ot := reflect.TypeOf(obj)
 
     for i := 0; i < ot.NumMethod(); i++ {
@@ -34,10 +34,13 @@ func (h *Handler) Register(prefix string, obj interface{}) error {
         }
 
         var name string
-        if prefix == "" {
+        if mapper == nil {
             name = m.Name
         } else {
-            name = prefix + "." + m.Name
+            name = mapper(m.Name)
+            if name == "" {
+                continue
+            }
         }
 
         md := &methodData{obj: obj, method: m}
