@@ -1,5 +1,3 @@
-// Package xmlrpc provides a rudimentary interface for sneding and receiving
-// XML-RPC requests
 package xmlrpc
 
 import (
@@ -16,10 +14,6 @@ import (
     "encoding/xml"
 )
 
-func isSpace(c byte) bool {
-        return c == ' ' || c == '\t' || c == '\r' || c == '\n'
-}
-
 // A Fault represents an error or exception in the procedure call
 // being run on the remote machine
 type Fault struct {
@@ -27,6 +21,7 @@ type Fault struct {
     Msg string
 }
 
+// Return a string representation of the XML-RPC fault
 func (f *Fault) String() string {
     if f == nil {
         return "NilFault"
@@ -44,6 +39,7 @@ func extractParams(v []interface{}) interface{} {
     return v
 }
 
+// get the method name from the <methodResponse>
 func getMethodName(p *xml.Decoder) (string, error) {
     var methodName string
 
@@ -71,7 +67,7 @@ func getMethodName(p *xml.Decoder) (string, error) {
             continue
         }
 
-        if tok.Is(TokenMethodName) {
+        if tok.Is(tokenMethodName) {
             if !tok.IsStart() {
                 if !inName {
                     return "", errors.New("Got </methodName> without" +
@@ -93,6 +89,7 @@ func getMethodName(p *xml.Decoder) (string, error) {
     return methodName, nil
 }
 
+// extract the method data
 func getMethodData(p *xml.Decoder) ([]interface{}, *Fault, error) {
     var params = make([]interface{}, 0)
     var fault *Fault
@@ -111,7 +108,7 @@ func getMethodData(p *xml.Decoder) ([]interface{}, *Fault, error) {
             return nil, nil, err
         }
 
-        if tok.Is(TokenParams) {
+        if tok.Is(tokenParams) {
             if !tok.IsStart() {
                 // found end marker for tag, so we're done
                 break
@@ -120,7 +117,7 @@ func getMethodData(p *xml.Decoder) ([]interface{}, *Fault, error) {
             inParams = true
             continue
         } else if inParams {
-            if tok.Is(TokenParam) {
+            if tok.Is(tokenParam) {
                 inParam = tok.IsStart()
                 continue
             } else if inParam {
@@ -134,7 +131,7 @@ func getMethodData(p *xml.Decoder) ([]interface{}, *Fault, error) {
             }
         }
 
-        if tok.Is(TokenFault) {
+        if tok.Is(tokenFault) {
             if !tok.IsStart() {
                 // found end marker for tag, so we're done
                 break
@@ -161,6 +158,7 @@ func getMethodData(p *xml.Decoder) ([]interface{}, *Fault, error) {
     return params, fault, nil
 }
 
+// get the XML-RPC fault
 func getFault(p *xml.Decoder) (*Fault, error) {
     val, err := getValue(p)
     if err != nil {
@@ -173,6 +171,7 @@ func getFault(p *xml.Decoder) (*Fault, error) {
         Msg:fmap["faultString"].(string)}, nil
 }
 
+// parse a <value>
 func getValue(p *xml.Decoder) (interface{}, error) {
     var value interface{}
 
@@ -184,7 +183,7 @@ func getValue(p *xml.Decoder) (interface{}, error) {
             return nil, err
         }
 
-        if tok.Is(TokenValue) {
+        if tok.Is(tokenValue) {
             if !tok.IsStart() {
                 // found end marker for tag, so we're done
                 break
@@ -214,8 +213,9 @@ func getValue(p *xml.Decoder) (interface{}, error) {
     return value, nil
 }
 
+// parse the <value> data
 func getValueData(p *xml.Decoder) (interface{}, bool, error) {
-    var toktype = TokenUnknown
+    var toktype = tokenUnknown
     var value interface{}
 const debug = false
 if(debug){fmt.Printf("VALDATA top\n")}
@@ -231,7 +231,7 @@ if(debug){fmt.Printf("VALDATA %s IsData %v\n", tok, tok.IsDataType())}
 
         if tok.IsDataType() {
             if tok.IsStart() {
-                if toktype == TokenUnknown {
+                if toktype == tokenUnknown {
                     toktype = tok.token
                     value, err = getData(p, tok)
 if(debug){fmt.Printf("GetData -> %v<%T>\n", value, value)}
@@ -255,7 +255,7 @@ if(debug){fmt.Printf("GetData -> %v<%T>\n", value, value)}
             if value == nil {
                 value = tok.Text()
             }
-        } else if tok.Is(TokenValue) {
+        } else if tok.Is(tokenValue) {
             return value, true, nil
         } else {
             err = errors.New(fmt.Sprintf("Unexpected valueData token %s", tok))
@@ -267,6 +267,7 @@ if(debug){fmt.Printf("VALDATA -> %v\n", value)}
     return value, false, nil
 }
 
+// parse a <struct>
 func getStruct(p *xml.Decoder) (map[string]interface{}, error) {
     var data = make(map[string]interface{})
 const debug = false
@@ -289,7 +290,7 @@ if(debug){fmt.Printf("STRUCT %s inStc %v InMbr %v inName %v gotName %v name %v\n
             return nil, err
         }
 
-        if tok.Is(TokenStruct) {
+        if tok.Is(tokenStruct) {
             if !tok.IsStart() {
                 // found end marker for tag, so we're done
                 break
@@ -298,12 +299,12 @@ if(debug){fmt.Printf("STRUCT %s inStc %v InMbr %v inName %v gotName %v name %v\n
             inStruct = true
             continue
         } else if inStruct {
-            if tok.Is(TokenMember) {
+            if tok.Is(tokenMember) {
                 inMember = tok.IsStart()
                 gotName = false
                 continue
             } else if inMember {
-                if tok.Is(TokenName) {
+                if tok.Is(tokenName) {
                     inName = tok.IsStart()
                     if !inName {
                         gotName = true
@@ -336,6 +337,7 @@ if(debug){fmt.Printf("STRUCT -> %v\n", data)}
     return data, nil
 }
 
+// parse an <array>
 func getArray(p *xml.Decoder) (interface{}, error) {
     var data = make([]interface{}, 0)
 const debug = false
@@ -354,7 +356,7 @@ if(debug){fmt.Printf("ARRAY %s inAry %v InDat %v\n", tok, inArray, inData)}
             return nil, err
         }
 
-        if tok.Is(TokenArray) {
+        if tok.Is(tokenArray) {
             if !tok.IsStart() {
                 // found end marker for tag, so we're done
                 break
@@ -363,11 +365,11 @@ if(debug){fmt.Printf("ARRAY %s inAry %v InDat %v\n", tok, inArray, inData)}
             inArray = true
             continue
         } else if inArray {
-            if tok.Is(TokenData) {
+            if tok.Is(tokenData) {
                 inData = tok.IsStart()
                 continue
             } else if inData {
-                if tok.Is(TokenValue) {
+                if tok.Is(tokenValue) {
                     if tok.IsStart() {
                         value, sawEndValue, verr := getValueData(p)
                         if verr != nil {
@@ -413,6 +415,7 @@ fmt.Printf("#%d append %v<%T> to %v<%T>\n", i, v, v, array, array)
     return data, nil
 }
 
+// parse either a raw string or a <string>xxx</string>
 func getText(p *xml.Decoder) (string, error) {
     tok, err := getNextToken(p)
     if tok == nil {
@@ -421,7 +424,7 @@ func getText(p *xml.Decoder) (string, error) {
         return "", err
     }
 
-    if tok.Is(TokenString) && !tok.IsStart() {
+    if tok.Is(tokenString) && !tok.IsStart() {
         return "", nil
     } else if !tok.IsText() {
         return "", errors.New(fmt.Sprintf("Unexpected token %s in getText()",
@@ -431,18 +434,19 @@ func getText(p *xml.Decoder) (string, error) {
     return tok.Text(), nil
 }
 
-func getData(p *xml.Decoder, tok *XToken) (interface{}, error) {
+// convert the XML-RPC to Go data
+func getData(p *xml.Decoder, tok *xmlToken) (interface{}, error) {
     var valStr string
     var err error
 
 const debug = false
 if(debug){fmt.Printf("DATA top tok %v\n", tok)}
     switch tok.token {
-    case TokenArray:
+    case tokenArray:
         return getArray(p)
-    case TokenBase64:
+    case tokenBase64:
         return nil, errors.New("parseDataString(base64) unimplemented")
-    case TokenBoolean:
+    case tokenBoolean:
         valStr, err = getText(p)
         if err != nil {
             return nil, err
@@ -456,9 +460,9 @@ if(debug){fmt.Printf("DATA top tok %v\n", tok)}
             msg := fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
             return nil, errors.New(msg)
         }
-    case TokenDateTime:
+    case tokenDateTime:
         return nil, errors.New("getValue(dateTime) unimplemented")
-    case TokenDouble:
+    case tokenDouble:
         valStr, err = getText(p)
         if err != nil {
             return nil, err
@@ -470,7 +474,7 @@ if(debug){fmt.Printf("DATA top tok %v\n", tok)}
         }
 
         return f, nil
-    case TokenInt:
+    case tokenInt:
         valStr, err = getText(p)
         if err != nil {
             return nil, err
@@ -482,16 +486,16 @@ if(debug){fmt.Printf("DATA top tok %v\n", tok)}
         }
 
         return i, nil
-    case TokenNil:
+    case tokenNil:
         return nil, nil
-    case TokenString:
+    case tokenString:
         valStr, err = getText(p)
         if err != nil {
             return nil, err
         }
 
         return valStr, nil
-    case TokenStruct:
+    case tokenStruct:
         return getStruct(p)
     default:
         break
@@ -501,7 +505,7 @@ if(debug){fmt.Printf("DATA top tok %v\n", tok)}
         tok.Name()))
 }
 
-// Translate an XML string into a local data object
+// Translate an XML stream into a local data object
 func Unmarshal(r io.Reader) (string, interface{}, error, *Fault) {
     p := xml.NewDecoder(r)
 
@@ -522,13 +526,13 @@ func Unmarshal(r io.Reader) (string, interface{}, error, *Fault) {
             continue
         }
 
-        if tok.Is(TokenMethodResponse) {
+        if tok.Is(tokenMethodResponse) {
             if !tok.IsStart() {
                 break
             }
 
             isResp = tok.IsStart()
-        } else if tok.Is(TokenMethodCall) {
+        } else if tok.Is(tokenMethodCall) {
             if !tok.IsStart() {
                 break
             }
@@ -562,6 +566,7 @@ if(debug){fmt.Printf("--- XML\n%s\nXML ---\n", s)}
     return Unmarshal(strings.NewReader(s))
 }
 
+// translate an array into XML
 func wrapArray(w io.Writer, val reflect.Value) error {
     fmt.Fprintf(w, "<array><data>\n")
 
@@ -578,6 +583,7 @@ func wrapArray(w io.Writer, val reflect.Value) error {
     return nil
 }
 
+// translate a parameter into XML
 func wrapParam(w io.Writer, i int, xval interface{}) error {
     var valStr string
 
@@ -595,6 +601,7 @@ func wrapParam(w io.Writer, i int, xval interface{}) error {
     return nil
 }
 
+// translate Go data into XML
 func wrapValue(w io.Writer, val reflect.Value) error {
     var isError = false
 
@@ -674,6 +681,7 @@ func Marshal(w io.Writer, methodName string, args ... interface{}) error {
     return marshalArray(w, methodName, args)
 }
 
+// Write an array of zero or more data objects as an XML-RPC request
 func marshalArray(w io.Writer, methodName string, args []interface{}) error {
     var name string
     var addExtra bool
@@ -704,11 +712,13 @@ func marshalArray(w io.Writer, methodName string, args []interface{}) error {
     return nil
 }
 
+// XML-RPC client data
 type Client struct {
     http.Client
     urlStr string
 }
 
+// connect to a remote XML-RPC server
 func NewClient(host string, port int) (*Client, error) {
     address := fmt.Sprintf("http://%s:%d/RPC2", host, port)
 
@@ -720,6 +730,7 @@ func NewClient(host string, port int) (*Client, error) {
     return &Client{urlStr:uurl.String()}, nil
 }
 
+// call a procedure on a remote XML-RPC server
 func (c *Client) RPCCall(methodName string,
     args ... interface{}) (interface{}, error, *Fault) {
 

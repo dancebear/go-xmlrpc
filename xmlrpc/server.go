@@ -14,16 +14,23 @@ type methodData struct {
     method reflect.Method
 }
 
+// Map from XML-RPC procedure names to Go methods
 type Handler struct {
     methods map[string]*methodData
 }
 
+// create a new handler mapping XML-RPC procedure names to Go methods
 func NewHandler() *Handler {
     h := new(Handler)
     h.methods = make(map[string]*methodData)
     return h
 }
 
+// register all methods associated with the Go object, passing them
+// through the name mapper if one is supplied
+//
+// The name mapper can return "" to ignore a method or transform the
+// name as desired
 func (h *Handler) Register(obj interface{}, mapper func(string)string) error {
     ot := reflect.TypeOf(obj)
 
@@ -51,6 +58,7 @@ func (h *Handler) Register(obj interface{}, mapper func(string)string) error {
     return nil
 }
 
+// Return an XML-RPC fault
 func writeFault(out io.Writer, code int, msg string) {
     fmt.Fprintf(out, `<?xml version="1.0"?>
 <methodResponse>
@@ -71,11 +79,15 @@ func writeFault(out io.Writer, code int, msg string) {
 </methodResponse>`, code, msg)
 }
 
-const errNotWellFormed = -32700
-const errUnknownMethod = -32601
-const errInvalidParams = -32602
-const errInternal = -32603
+// semi-standard XML-RPC response codes
+const (
+    errNotWellFormed = -32700
+    errUnknownMethod = -32601
+    errInvalidParams = -32602
+    errInternal = -32603
+)
 
+// handle an XML-RPC request
 func (h *Handler) handleRequest(resp http.ResponseWriter, req *http.Request) {
     methodName, params, err, fault := Unmarshal(req.Body)
 
@@ -145,6 +157,7 @@ func (h *Handler) handleRequest(resp http.ResponseWriter, req *http.Request) {
     buf.WriteTo(resp)
 }
 
+// start an XML-RPC server
 func StartServer(port int) *Handler {
     h := NewHandler()
     http.HandleFunc("/", h.handleRequest)
