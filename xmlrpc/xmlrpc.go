@@ -1,3 +1,5 @@
+// Package xmlrpc provides a rudimentary interface for sneding and receiving
+// XML-RPC requests
 package xmlrpc
 
 import (
