@@ -1,7 +1,6 @@
 package xmlrpc
 
 import (
-    "bufio"
     "bytes"
     "errors"
     "fmt"
@@ -19,6 +18,10 @@ import (
 type Fault struct {
     Code int
     Msg string
+}
+
+func NewFault(code int, msg string) *Fault {
+    return &Fault{Code:code, Msg:msg}
 }
 
 // Return a string representation of the XML-RPC fault
@@ -217,8 +220,6 @@ func getValue(p *xml.Decoder) (interface{}, error) {
 func getValueData(p *xml.Decoder) (interface{}, bool, error) {
     var toktype = tokenUnknown
     var value interface{}
-const debug = false
-if(debug){fmt.Printf("VALDATA top\n")}
     for {
         tok, err := getNextToken(p)
         if tok == nil {
@@ -227,14 +228,12 @@ if(debug){fmt.Printf("VALDATA top\n")}
         } else if err != nil {
             return nil, false, err
         }
-if(debug){fmt.Printf("VALDATA %s IsData %v\n", tok, tok.IsDataType())}
 
         if tok.IsDataType() {
             if tok.IsStart() {
                 if toktype == tokenUnknown {
                     toktype = tok.token
                     value, err = getData(p, tok)
-if(debug){fmt.Printf("GetData -> %v<%T>\n", value, value)}
                     if err != nil {
                         return nil, false, err
                     }
@@ -263,14 +262,12 @@ if(debug){fmt.Printf("GetData -> %v<%T>\n", value, value)}
         }
     }
 
-if(debug){fmt.Printf("VALDATA -> %v\n", value)}
     return value, false, nil
 }
 
 // parse a <struct>
 func getStruct(p *xml.Decoder) (map[string]interface{}, error) {
     var data = make(map[string]interface{})
-const debug = false
 
     // state variables
     inStruct := true
@@ -282,8 +279,6 @@ const debug = false
 
     for {
         tok, err := getNextToken(p)
-if(debug){fmt.Printf("STRUCT %s inStc %v InMbr %v inName %v gotName %v name %v\n",
-    tok, inStruct, inMember, inName, gotName, name)}
         if tok == nil {
             return nil, errors.New("Unexpected end-of-file in getStruct()")
         } else if err != nil {
@@ -333,23 +328,19 @@ if(debug){fmt.Printf("STRUCT %s inStc %v InMbr %v inName %v gotName %v name %v\n
         }
     }
 
-if(debug){fmt.Printf("STRUCT -> %v\n", data)}
     return data, nil
 }
 
 // parse an <array>
 func getArray(p *xml.Decoder) (interface{}, error) {
     var data = make([]interface{}, 0)
-const debug = false
 
     // state variables
     inArray := true
     inData := false
 
-if(debug){fmt.Printf("ARRAY top\n")}
     for {
         tok, err := getNextToken(p)
-if(debug){fmt.Printf("ARRAY %s inAry %v InDat %v\n", tok, inArray, inData)}
         if tok == nil {
             return nil, errors.New("Unexpected end-of-file in getArray()")
         } else if err != nil {
@@ -380,7 +371,6 @@ if(debug){fmt.Printf("ARRAY %s inAry %v InDat %v\n", tok, inArray, inData)}
                             }
                         }
 
-if(debug){fmt.Printf("ARRAY value -> %v\n", value)}
                         data = append(data, value)
                     }
                 }
@@ -409,7 +399,6 @@ fmt.Printf("#%d append %v<%T> to %v<%T>\n", i, v, v, array, array)
         array = reflect.Append(array, v)
     }
 
-    if(debug){fmt.Printf("ARRAY -> %v<%T>\n", array, array)}
     return array.Slice(0, array.Len(), nil
 */
     return data, nil
@@ -439,8 +428,6 @@ func getData(p *xml.Decoder, tok *xmlToken) (interface{}, error) {
     var valStr string
     var err error
 
-const debug = false
-if(debug){fmt.Printf("DATA top tok %v\n", tok)}
     switch tok.token {
     case tokenArray:
         return getArray(p)
@@ -561,8 +548,6 @@ func Unmarshal(r io.Reader) (string, interface{}, error, *Fault) {
 
 // Translate an XML string into a local data object
 func UnmarshalString(s string) (string, interface{}, error, *Fault) {
-const debug = false
-if(debug){fmt.Printf("--- XML\n%s\nXML ---\n", s)}
     return Unmarshal(strings.NewReader(s))
 }
 
@@ -755,20 +740,6 @@ func (c *Client) RPCCall(methodName string,
         msg := fmt.Sprintf("PostString for %s returned nil response\n",
             methodName)
         return nil, errors.New(msg), nil
-    }
-
-    const debug = false
-    if (debug) {
-        scanner := bufio.NewScanner(r.Body)
-        for scanner.Scan() {
-            fmt.Println(scanner.Text())
-        }
-
-        if err := scanner.Err(); err != nil {
-            fmt.Printf("ERROR: %v\n", err)
-        }
-
-        return nil, errors.New("Dumped request"), nil
     }
 
     _, pval, perr, pfault := Unmarshal(r.Body)

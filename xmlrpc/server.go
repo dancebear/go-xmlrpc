@@ -2,9 +2,11 @@ package xmlrpc
 
 import (
     "bytes"
+    "encoding/xml"
     "fmt"
-    "net/http"
     "io"
+    "net/http"
+    "os"
     "reflect"
     "strings"
 )
@@ -12,6 +14,7 @@ import (
 type methodData struct {
     obj interface{}
     method reflect.Method
+    padParams bool
 }
 
 // Map from XML-RPC procedure names to Go methods
@@ -31,7 +34,8 @@ func NewHandler() *Handler {
 //
 // The name mapper can return "" to ignore a method or transform the
 // name as desired
-func (h *Handler) Register(obj interface{}, mapper func(string)string) error {
+func (h *Handler) Register(obj interface{}, mapper func(string)string,
+    padParams bool) error {
     ot := reflect.TypeOf(obj)
 
     for i := 0; i < ot.NumMethod(); i++ {
@@ -50,13 +54,15 @@ func (h *Handler) Register(obj interface{}, mapper func(string)string) error {
             }
         }
 
-        md := &methodData{obj: obj, method: m}
+        md := &methodData{obj: obj, method: m, padParams: padParams}
         h.methods[name] = md
         h.methods[strings.ToLower(name)] = md
     }
 
     return nil
 }
+
+var faultType = reflect.TypeOf((*Fault)(nil))
 
 // Return an XML-RPC fault
 func writeFault(out io.Writer, code int, msg string) {
@@ -71,12 +77,20 @@ func writeFault(out io.Writer, code int, msg string) {
           </member>
           <member>
             <name>faultString</name>
-            <value>%s</value>
+            <value>`, code)
+    err := xml.EscapeText(out, []byte(msg))
+    fmt.Fprintf(out, `</value>
           </member>
         </struct>
     </value>
   </fault>
-</methodResponse>`, code, msg)
+</methodResponse>`)
+
+    // XXX dump the error to Stderr for now
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Cannot write fault#%d(%s): %v\n", code, msg,
+            err)
+    }
 }
 
 // semi-standard XML-RPC response codes
@@ -116,19 +130,26 @@ func (h *Handler) handleRequest(resp http.ResponseWriter, req *http.Request) {
         return
     }
 
-    if len(args) + 1 != mData.method.Type.NumIn() {
-        writeFault(resp, errInvalidParams,
-            fmt.Sprintf("Bad number of parameters for method \"%s\"," +
-                " (%d != %d)", methodName, len(args),
-                mData.method.Type.NumIn()))
-        return
+    expArgs := mData.method.Type.NumIn()
+    if len(args) + 1 != expArgs {
+        if !mData.padParams || len(args) + 1 > expArgs {
+            writeFault(resp, errInvalidParams,
+                fmt.Sprintf("Bad number of parameters for method \"%s\"," +
+                    " (%d != %d)", methodName, len(args), expArgs - 1))
+            return
+        }
     }
 
-    vals := make([]reflect.Value, len(args) + 1, len(args) + 1)
+    vals := make([]reflect.Value, expArgs, expArgs)
 
     vals[0] = reflect.ValueOf(mData.obj)
-    for i := 1; i < mData.method.Type.NumIn(); i++ {
-        if mData.method.Type.In(i) != reflect.TypeOf(args[i - 1]) {
+    for i := 1; i < expArgs; i++ {
+        if mData.padParams && i >= len(args) {
+            vals[i] = reflect.Zero(mData.method.Type.In(i))
+            continue
+        }
+
+        if !reflect.TypeOf(args[i - 1]).ConvertibleTo(mData.method.Type.In(i)) {
             writeFault(resp, errInvalidParams,
                 fmt.Sprintf("Bad %s argument #%d (%v should be %v)",
                     methodName, i - 1, reflect.TypeOf(args[i - 1]),
@@ -141,6 +162,13 @@ func (h *Handler) handleRequest(resp http.ResponseWriter, req *http.Request) {
 
     rtnVals := mData.method.Func.Call(vals)
 
+    if len(rtnVals) == 1 && reflect.TypeOf(rtnVals[0].Interface()) == faultType {
+        if fault, ok := rtnVals[0].Interface().(*Fault); ok {
+            writeFault(resp, fault.Code, fault.Msg)
+            return
+        }
+    }
+
     mArray := make([]interface{}, len(rtnVals), len(rtnVals))
     for i := 0; i < len(rtnVals); i++ {
         mArray[i] = rtnVals[i].Interface()
@@ -149,7 +177,7 @@ func (h *Handler) handleRequest(resp http.ResponseWriter, req *http.Request) {
     buf := bytes.NewBufferString("")
     err = marshalArray(buf, "", mArray)
     if err != nil {
-        writeFault(resp, errInternal, fmt.Sprintf("Faied to marshal %s: %v",
+        writeFault(resp, errInternal, fmt.Sprintf("Failed to marshal %s: %v",
             methodName, err))
         return
     }

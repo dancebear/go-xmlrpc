@@ -98,17 +98,21 @@ func (tok *xmlToken) IsText() bool {
 }
 
 func (tok *xmlToken) Name() string {
-    if tok.token == tokenProcInst {
+    return getTokenName(tok.token)
+}
+
+func getTokenName(token int) string {
+    if token == tokenProcInst {
         return "ProcInst"
     }
 
     for k, v := range tokenMap {
-        if v == tok.token {
+        if v == token {
             return k
         }
     }
 
-    return fmt.Sprintf("??#%d??", tok.token)
+    return fmt.Sprintf("??#%d??", token)
 }
 
 func (tok *xmlToken) Text() string {
@@ -135,40 +139,20 @@ func (tok *xmlToken) String() string {
 }
 
 func getTagToken(tag string) (int, error) {
-    tok, ok := tokenMap[tag]
-    if !ok {
-        if tag == "i4" {
-            tok = tokenInt
-        } else {
-            return tokenUnknown, errors.New(fmt.Sprintf("Unknown tag <%s>",
-                tag))
-        }
+    if tok, ok := tokenMap[tag]; ok {
+        return tok, nil
+    } else if tag == "i4" {
+        return tokenInt, nil
+    } else {
+        return tokenUnknown, errors.New(fmt.Sprintf("Unknown tag <%s>",
+            tag))
     }
-
-    return tok, nil
 }
 
 func getNextToken(p *xml.Decoder) (*xmlToken, error) {
-const debug2 = false
     tag, err := p.Token()
-    if tag == nil {
-if(debug2){fmt.Printf("P-> EOF\n")}
-        return nil, nil
-    } else if err != nil {
-if(debug2){fmt.Printf("P!!#1 %s\n", err.Error())}
+    if tag == nil || err != nil {
         return nil, err
-    }
-
-    const debug = false
-    if debug {
-        var tagStr string
-        if t2, ok := tag.(xml.CharData); ok {
-            tagStr = string([]byte(t2))
-        } else {
-            tagStr = fmt.Sprintf("%v", tag)
-        }
-
-        fmt.Printf("tag %s<%T>\n", tagStr, tagStr)
     }
 
     if tokenMap == nil {
@@ -179,29 +163,23 @@ if(debug2){fmt.Printf("P!!#1 %s\n", err.Error())}
     case xml.StartElement:
         tok, err := getTagToken(v.Name.Local)
         if err != nil {
-if(debug2){fmt.Printf("P!!#2 %v\n", err)}
             return nil, err
         }
 
-if(debug2){fmt.Printf("P-> <%s>#%d\n", v.Name.Local, tok)}
         return &xmlToken{token:tok, isStart:true}, nil
     case xml.EndElement:
         tok, err := getTagToken(v.Name.Local)
         if err != nil {
-if(debug2){fmt.Printf("P!!#3 %s\n", err.Error())}
             return nil, err
         }
 
-if(debug2){fmt.Printf("P-> </%s>#%d\n", v.Name.Local, tok)}
         return &xmlToken{token:tok, isStart:false}, nil
     case xml.CharData:
-if(debug2){fmt.Printf("P-> \"%s\"\n", string(v))}
         return &xmlToken{token:tokenText, text:string(v)}, nil
     case xml.ProcInst:
         return &xmlToken{token:tokenProcInst}, nil
     default:
-if(debug2){fmt.Printf("P!! %v(%T)\n", v, v)}
-        err := errors.New(fmt.Sprintf("Not handling <value> %v (type %T)",
+        err := errors.New(fmt.Sprintf("Not handling XML token %v (type %T)",
             v, v))
         return nil, err
     }
