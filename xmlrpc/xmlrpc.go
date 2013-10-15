@@ -60,8 +60,8 @@ func getMethodName(p *xml.Decoder) (string, error) {
                 // ignore text outside <methodName> and </methodName>
             } else {
                 if methodName != "" {
-                    return "", errors.New(fmt.Sprintf("Multiple method names" +
-                        " (\"%s\" and \"%s\")", methodName, tok.Text()))
+                    return "", fmt.Errorf("Multiple method names" +
+                        " (\"%s\" and \"%s\")", methodName, tok.Text())
                 }
 
                 methodName = tok.Text()
@@ -85,8 +85,7 @@ func getMethodName(p *xml.Decoder) (string, error) {
             continue
         }
 
-        return "", errors.New(fmt.Sprintf("Unexpected methodName token %s",
-            tok))
+        return "", fmt.Errorf("Unexpected methodName token %s", tok)
     }
 
     return methodName, nil
@@ -153,7 +152,7 @@ func getMethodData(p *xml.Decoder) ([]interface{}, *Fault, error) {
         }
 
         if !tok.IsText() {
-            err = errors.New(fmt.Sprintf("Unexpected methodData token %s", tok))
+            err = fmt.Errorf("Unexpected methodData token %s", tok)
             return nil, nil, err
         }
     }
@@ -208,7 +207,7 @@ func getValue(p *xml.Decoder) (interface{}, error) {
         }
 
         if !tok.IsText() {
-            err = errors.New(fmt.Sprintf("Unexpected value token %v", tok))
+            err = fmt.Errorf("Unexpected value token %v", tok)
             return nil, err
         }
     }
@@ -243,8 +242,8 @@ func getValueData(p *xml.Decoder) (interface{}, bool, error) {
                 }
             } else {
                 if !tok.Is(toktype) {
-                    msg := fmt.Sprintf("Unexpected valueData token %s", tok)
-                    return nil, false, errors.New(msg)
+                    err = fmt.Errorf("Unexpected valueData token %s", tok)
+                    return nil, false, err
                 }
 
                 // found end marker for tag, so we're done
@@ -257,7 +256,7 @@ func getValueData(p *xml.Decoder) (interface{}, bool, error) {
         } else if tok.Is(tokenValue) {
             return value, true, nil
         } else {
-            err = errors.New(fmt.Sprintf("Unexpected valueData token %s", tok))
+            err = fmt.Errorf("Unexpected valueData token %s", tok)
             return nil, false, err
         }
     }
@@ -323,7 +322,7 @@ func getStruct(p *xml.Decoder) (map[string]interface{}, error) {
         }
 
         if !tok.IsText() {
-            err = errors.New(fmt.Sprintf("Unexpected struct token %s", tok))
+            err = fmt.Errorf("Unexpected struct token %s", tok)
             return nil, err
         }
     }
@@ -380,7 +379,7 @@ func getArray(p *xml.Decoder) (interface{}, error) {
         }
 
         if !tok.IsText() {
-            err = errors.New(fmt.Sprintf("Unexpected array token %s", tok))
+            err = fmt.Errorf("Unexpected array token %s", tok)
             return nil, err
         }
     }
@@ -416,8 +415,7 @@ func getText(p *xml.Decoder) (string, error) {
     if tok.Is(tokenString) && !tok.IsStart() {
         return "", nil
     } else if !tok.IsText() {
-        return "", errors.New(fmt.Sprintf("Unexpected token %s in getText()",
-            tok))
+        return "", fmt.Errorf("Unexpected token %s in getText()", tok)
     }
 
     return tok.Text(), nil
@@ -444,8 +442,7 @@ func getData(p *xml.Decoder, tok *xmlToken) (interface{}, error) {
         } else if valStr == "0" {
             return false, nil
         } else {
-            msg := fmt.Sprintf("Bad <boolean> value \"%s\"", valStr)
-            return nil, errors.New(msg)
+            return nil, fmt.Errorf("Bad <boolean> value \"%s\"", valStr)
         }
     case tokenDateTime:
         return nil, errors.New("getValue(dateTime) unimplemented")
@@ -488,8 +485,7 @@ func getData(p *xml.Decoder, tok *xmlToken) (interface{}, error) {
         break
     }
 
-    return nil, errors.New(fmt.Sprintf("Unknown type %s oin getData()",
-        tok.Name()))
+    return nil, fmt.Errorf("Unknown type %s oin getData()", tok.Name())
 }
 
 // Translate an XML stream into a local data object
@@ -524,8 +520,8 @@ func Unmarshal(r io.Reader) (string, interface{}, error, *Fault) {
                 break
             }
         } else {
-            msg := fmt.Sprintf("Unrecognized tag <%s>", tok.Name())
-            return "", nil, errors.New(msg), nil
+            err := fmt.Errorf("Unrecognized tag <%s>", tok.Name())
+            return "", nil, err, nil
         }
 
         if !isResp && tok.IsStart() {
@@ -648,14 +644,11 @@ func wrapValue(w io.Writer, val reflect.Value) error {
     case reflect.UnsafePointer:
         isError = true
     default:
-        err := fmt.Sprintf("Unknown Kind %v for %T (%v)", val.Kind(),
-            val, val)
-        return errors.New(err)
+        return fmt.Errorf("Unknown Kind %v for %T (%v)", val.Kind(), val, val)
     }
 
     if isError {
-        err := fmt.Sprintf("Not wrapping type %v (%v)", val.Kind().String(), val)
-        return errors.New(err)
+        return fmt.Errorf("Not wrapping type %v (%v)", val.Kind().String(), val)
     }
 
     return nil
@@ -737,9 +730,9 @@ func (c *Client) RPCCall(methodName string,
     if err != nil {
         return nil, err, nil
     } else if r == nil {
-        msg := fmt.Sprintf("PostString for %s returned nil response\n",
+        err = fmt.Errorf("PostString for %s returned nil response\n",
             methodName)
-        return nil, errors.New(msg), nil
+        return nil, err, nil
     }
 
     _, pval, perr, pfault := Unmarshal(r.Body)

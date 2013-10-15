@@ -2,7 +2,6 @@ package xmlrpc
 
 import (
     "encoding/xml"
-    "errors"
     "fmt"
 )
 
@@ -144,8 +143,7 @@ func getTagToken(tag string) (int, error) {
     } else if tag == "i4" {
         return tokenInt, nil
     } else {
-        return tokenUnknown, errors.New(fmt.Sprintf("Unknown tag <%s>",
-            tag))
+        return tokenUnknown, fmt.Errorf("Unknown tag <%s>", tag)
     }
 }
 
@@ -179,8 +177,6 @@ func getNextToken(p *xml.Decoder) (*xmlToken, error) {
     case xml.ProcInst:
         return &xmlToken{token:tokenProcInst}, nil
     default:
-        err := errors.New(fmt.Sprintf("Not handling XML token %v (type %T)",
-            v, v))
-        return nil, err
+        return nil, fmt.Errorf("Not handling XML token %v (type %T)", v, v)
     }
 }
