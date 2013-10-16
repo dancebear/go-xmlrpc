@@ -2,6 +2,7 @@ package xmlrpc
 
 import (
 	"bytes"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"encoding/xml"
 )
 
 // A Fault represents an error or exception in the procedure call
