@@ -21,7 +21,7 @@ type Fault struct {
 }
 
 func NewFault(code int, msg string) *Fault {
-	return &Fault{Code:code, Msg:msg}
+	return &Fault{Code: code, Msg: msg}
 }
 
 // Return a string representation of the XML-RPC fault
@@ -60,7 +60,7 @@ func getMethodName(p *xml.Decoder) (string, error) {
 				// ignore text outside <methodName> and </methodName>
 			} else {
 				if methodName != "" {
-					return "", fmt.Errorf("Multiple method names" +
+					return "", fmt.Errorf("Multiple method names"+
 						" (\"%s\" and \"%s\")", methodName, tok.Text())
 				}
 
@@ -169,8 +169,8 @@ func getFault(p *xml.Decoder) (*Fault, error) {
 
 	fmap := val.(map[string]interface{})
 
-	return &Fault{Code:fmap["faultCode"].(int),
-		Msg:fmap["faultString"].(string)}, nil
+	return &Fault{Code: fmap["faultCode"].(int),
+		Msg: fmap["faultString"].(string)}, nil
 }
 
 // parse a <value>
@@ -655,7 +655,7 @@ func wrapValue(w io.Writer, val reflect.Value) error {
 }
 
 // Write a local data object as an XML-RPC request
-func Marshal(w io.Writer, methodName string, args ... interface{}) error {
+func Marshal(w io.Writer, methodName string, args ...interface{}) error {
 	return marshalArray(w, methodName, args)
 }
 
@@ -705,12 +705,12 @@ func NewClient(host string, port int) (*Client, error) {
 		return nil, uerr
 	}
 
-	return &Client{urlStr:uurl.String()}, nil
+	return &Client{urlStr: uurl.String()}, nil
 }
 
 // call a procedure on a remote XML-RPC server
 func (c *Client) RPCCall(methodName string,
-	args ... interface{}) (interface{}, error, *Fault) {
+	args ...interface{}) (interface{}, error, *Fault) {
 
 	buf := bytes.NewBufferString("")
 	berr := marshalArray(buf, methodName, args)

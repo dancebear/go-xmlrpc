@@ -164,18 +164,18 @@ func getNextToken(p *xml.Decoder) (*xmlToken, error) {
 			return nil, err
 		}
 
-		return &xmlToken{token:tok, isStart:true}, nil
+		return &xmlToken{token: tok, isStart: true}, nil
 	case xml.EndElement:
 		tok, err := getTagToken(v.Name.Local)
 		if err != nil {
 			return nil, err
 		}
 
-		return &xmlToken{token:tok, isStart:false}, nil
+		return &xmlToken{token: tok, isStart: false}, nil
 	case xml.CharData:
-		return &xmlToken{token:tokenText, text:string(v)}, nil
+		return &xmlToken{token: tokenText, text: string(v)}, nil
 	case xml.ProcInst:
-		return &xmlToken{token:tokenProcInst}, nil
+		return &xmlToken{token: tokenProcInst}, nil
 	default:
 		return nil, fmt.Errorf("Not handling XML token %v (type %T)", v, v)
 	}

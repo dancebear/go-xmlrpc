@@ -38,7 +38,7 @@ func getTypeString(val interface{}, noSpaces bool) string {
 		// hack to make float values match
 		fStr := fmt.Sprintf("%f", v)
 		fLen := len(fStr)
-		fSub := fStr[fLen-3:fLen]
+		fSub := fStr[fLen-3 : fLen]
 		if fLen > 3 && fSub != "000" {
 			fStr += "000"
 		}
@@ -79,7 +79,7 @@ func getTypeString(val interface{}, noSpaces bool) string {
 }
 
 // Translate a local data object into an XML string
-func marshalString(methodName string, args ... interface{}) (string, error) {
+func marshalString(methodName string, args ...interface{}) (string, error) {
 	buf := bytes.NewBufferString("")
 	err := marshalArray(buf, methodName, args)
 	if err != nil {
@@ -115,7 +115,7 @@ func parseAndCheck(t *testing.T, methodName string, expVal interface{},
 			t.Fatalf("Returned type %T, not %T", val, expVal)
 		}
 
-		if ! reflect.DeepEqual(val, expVal) {
+		if !reflect.DeepEqual(val, expVal) {
 			t.Fatalf("Returned value %v, not %v", val, expVal)
 		}
 	}
@@ -152,7 +152,7 @@ func wrapAndParse(t *testing.T, methodName string, expVal interface{}) {
 	parseAndCheck(t, methodName, expVal, xmlStr)
 }
 
-func wrapMethod(methodName string, args ... interface{}) string {
+func wrapMethod(methodName string, args ...interface{}) string {
 	buf := bytes.NewBufferString("<?xml version=\"1.0\"?>\n")
 
 	var backStr string
@@ -223,7 +223,7 @@ func TestMakeRequestInt(t *testing.T) {
 }
 
 func TestMakeRequestArray(t *testing.T) {
-	expVal := []int{ 1, 2, 3, 4 }
+	expVal := []int{1, 2, 3, 4}
 	methodName := "foo"
 
 	xmlStr, err := marshalString(methodName, expVal)
@@ -278,7 +278,7 @@ func TestParseRequestInt(t *testing.T) {
 }
 
 func XXXTestParseResponseArray(t *testing.T) {
-	var array = []int { 1, -1, 0, 1234567 }
+	var array = []int{1, -1, 0, 1234567}
 	wrapAndParse(t, "", array)
 }
 
@@ -419,8 +419,8 @@ func TestParseResponseStringEscapedChars(t *testing.T) {
 }
 
 func TestParseResponseStruct(t *testing.T) {
-	structMap := map[string]interface{} {
-		"boolVal":true, "intVal":18, "strVal":"foo",
+	structMap := map[string]interface{}{
+		"boolVal": true, "intVal": 18, "strVal": "foo",
 	}
 	wrapAndParse(t, "", structMap)
 }

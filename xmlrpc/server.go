@@ -34,7 +34,7 @@ func NewHandler() *Handler {
 //
 // The name mapper can return "" to ignore a method or transform the
 // name as desired
-func (h *Handler) Register(obj interface{}, mapper func(string)string,
+func (h *Handler) Register(obj interface{}, mapper func(string) string,
 	padParams bool) error {
 	ot := reflect.TypeOf(obj)
 
@@ -131,11 +131,11 @@ func (h *Handler) handleRequest(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	expArgs := mData.method.Type.NumIn()
-	if len(args) + 1 != expArgs {
-		if !mData.padParams || len(args) + 1 > expArgs {
+	if len(args)+1 != expArgs {
+		if !mData.padParams || len(args)+1 > expArgs {
 			writeFault(resp, errInvalidParams,
-				fmt.Sprintf("Bad number of parameters for method \"%s\"," +
-					" (%d != %d)", methodName, len(args), expArgs - 1))
+				fmt.Sprintf("Bad number of parameters for method \"%s\","+
+					" (%d != %d)", methodName, len(args), expArgs-1))
 			return
 		}
 	}
@@ -149,15 +149,15 @@ func (h *Handler) handleRequest(resp http.ResponseWriter, req *http.Request) {
 			continue
 		}
 
-		if !reflect.TypeOf(args[i - 1]).ConvertibleTo(mData.method.Type.In(i)) {
+		if !reflect.TypeOf(args[i-1]).ConvertibleTo(mData.method.Type.In(i)) {
 			writeFault(resp, errInvalidParams,
 				fmt.Sprintf("Bad %s argument #%d (%v should be %v)",
-					methodName, i - 1, reflect.TypeOf(args[i - 1]),
+					methodName, i-1, reflect.TypeOf(args[i-1]),
 					mData.method.Type.In(i)))
 			return
 		}
 
-		vals[i] = reflect.ValueOf(args[i - 1])
+		vals[i] = reflect.ValueOf(args[i-1])
 	}
 
 	rtnVals := mData.method.Func.Call(vals)
