@@ -398,8 +398,9 @@ fmt.Printf("#%d append %v<%T> to %v<%T>\n", i, v, v, array, array)
 		array = reflect.Append(array, v)
 	}
 
-	return array.Slice(0, array.Len(), nil
+	return array.Slice(0, array.Len()), nil
 */
+
 	return data, nil
 }
 
