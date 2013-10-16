@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // A Fault represents an error or exception in the procedure call
@@ -422,6 +423,17 @@ func getText(p *xml.Decoder) (string, error) {
 	return tok.Text(), nil
 }
 
+const ISO8601_LAYOUT = "20060102T15:04:05"
+
+func getDateISO8601(p *xml.Decoder) (interface{}, error) {
+	valStr, err := getText(p)
+	if err != nil {
+		return nil, err
+	}
+
+	return time.Parse(ISO8601_LAYOUT, valStr)
+}
+
 // convert the XML-RPC to Go data
 func getData(p *xml.Decoder, tok *xmlToken) (interface{}, error) {
 	var valStr string
@@ -446,7 +458,7 @@ func getData(p *xml.Decoder, tok *xmlToken) (interface{}, error) {
 			return nil, fmt.Errorf("Bad <boolean> value \"%s\"", valStr)
 		}
 	case tokenDateTime:
-		return nil, errors.New("getValue(dateTime) unimplemented")
+		return getDateISO8601(p)
 	case tokenDouble:
 		valStr, err = getText(p)
 		if err != nil {
@@ -583,6 +595,9 @@ func wrapParam(w io.Writer, i int, xval interface{}) error {
 	return nil
 }
 
+// cached time.Time reflect.Type value
+var timeType reflect.Type
+
 // translate Go data into XML
 func wrapValue(w io.Writer, val reflect.Value) error {
 	var isError = false
@@ -641,7 +656,20 @@ func wrapValue(w io.Writer, val reflect.Value) error {
 			return aerr
 		}
 	case reflect.Struct:
-		isError = true
+		if timeType == nil {
+			timeType = reflect.TypeOf((*time.Time)(nil)).Elem()
+		}
+
+		if !val.Type().ConvertibleTo(timeType) {
+			isError = true
+		} else {
+			method := val.MethodByName("Format")
+			params := []reflect.Value{reflect.ValueOf(ISO8601_LAYOUT)}
+			rtn := method.Call(params)
+
+			tag := "dateTime.iso8601"
+			fmt.Fprintf(w, "<%s>%s</%s>", tag, rtn[0].String(), tag)
+		}
 	case reflect.UnsafePointer:
 		isError = true
 	default:

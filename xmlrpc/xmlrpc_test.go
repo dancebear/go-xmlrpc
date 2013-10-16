@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func getTypeString(val interface{}, noSpaces bool) string {
@@ -59,6 +60,10 @@ func getTypeString(val interface{}, noSpaces bool) string {
 		}
 		valStr += fmt.Sprintf("%s</struct>%s", preSpace, postSpace)
 		return valStr
+	case time.Time:
+		tag := "dateTime.iso8601"
+		return fmt.Sprintf("%s<%s>%s</%s>%s", pre, tag,
+			v.Format(ISO8601_LAYOUT), tag, post)
 	}
 
 	rval := reflect.ValueOf(val)
@@ -192,8 +197,13 @@ func TestMakeRequestBool(t *testing.T) {
 	}
 }
 
-func TestMakeRequestDouble(t *testing.T) {
-	expVal := 123.123
+func TestMakeRequestDateTime(t *testing.T) {
+	val := "19980717T14:08:55"
+	expVal, err := time.Parse(ISO8601_LAYOUT, val)
+	if err != nil {
+		t.Errorf("Cannot create ISO8601 time \"%s\"\n", val)
+	}
+
 	methodName := "foo"
 
 	xmlStr, err := marshalString(methodName, expVal)
@@ -297,9 +307,13 @@ func TestParseResponseBool(t *testing.T) {
 }
 
 func TestParseResponseDatetime(t *testing.T) {
-	tnm := "dateTime.iso8601"
 	val := "19980717T14:08:55"
-	parseUnimplemented(t, "", fmt.Sprintf("<%s>%v</%s>", tnm, val, tnm))
+	expVal, err := time.Parse(ISO8601_LAYOUT, val)
+	if err != nil {
+		t.Errorf("Cannot create ISO8601 time \"%s\"\n", val)
+	}
+
+	wrapAndParse(t, "", expVal)
 }
 
 func TestParseResponseDouble(t *testing.T) {
