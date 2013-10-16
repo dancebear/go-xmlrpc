@@ -71,9 +71,9 @@ func initTokenMap() {
 }
 
 type xmlToken struct {
-	token int
+	token   int
 	isStart bool
-	text string
+	text    string
 }
 
 func (tok *xmlToken) Is(val int) bool {

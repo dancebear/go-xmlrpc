@@ -17,7 +17,7 @@ import (
 // being run on the remote machine
 type Fault struct {
 	Code int
-	Msg string
+	Msg  string
 }
 
 func NewFault(code int, msg string) *Fault {

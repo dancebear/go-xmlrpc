@@ -12,8 +12,8 @@ import (
 )
 
 type methodData struct {
-	obj interface{}
-	method reflect.Method
+	obj       interface{}
+	method    reflect.Method
 	padParams bool
 }
 
@@ -98,7 +98,7 @@ const (
 	errNotWellFormed = -32700
 	errUnknownMethod = -32601
 	errInvalidParams = -32602
-	errInternal = -32603
+	errInternal      = -32603
 )
 
 // handle an XML-RPC request
