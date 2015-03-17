@@ -1,0 +1,1 @@
+A rudimentary XML-RPC client and server implementation written in Go
